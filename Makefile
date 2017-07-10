@@ -15,3 +15,12 @@
 # along with geckonator. If not, see <http://www.gnu.org/licenses/>.
 
 include include.mk
+
+CHIP   = EFM32HG322F64
+STTY   = stty
+CAT    = cat
+SERIAL = /dev/ttyUSB0
+
+cat: | $(SERIAL)
+	$(STTY) -F'$(SERIAL)' raw -echo -hup cs8 -parenb -cstopb 115200
+	$(CAT) '$(SERIAL)'
