@@ -384,24 +384,24 @@ usb_ep0in_dma_address_set(const void *addr)
 static inline void
 usb_ep_in_enable(unsigned int i)
 {
-	USB->DIEP[i].CTL |= USB_DIEP_CTL_EPENA | USB_DIEP_CTL_CNAK;
+	USB->DIEP[i-1].CTL |= USB_DIEP_CTL_EPENA | USB_DIEP_CTL_CNAK;
 }
 static inline void
 usb_ep_in_stall(unsigned int i)
 {
-	USB->DIEP[i].CTL |= USB_DIEP_CTL_STALL;
+	USB->DIEP[i-1].CTL |= USB_DIEP_CTL_STALL;
 }
 
 /* USB_DIEPx_INT */
 static inline uint32_t
 usb_ep_in_flags(unsigned int i)
 {
-	return USB->DIEP[i].INT;
+	return USB->DIEP[i-1].INT;
 }
 static inline void
 usb_ep_in_flags_clear(unsigned int i, uint32_t v)
 {
-	USB->DIEP[i].INT = v &
+	USB->DIEP[i-1].INT = v &
 		( USB_DIEP_INT_NAKINTRPT
 		| USB_DIEP_INT_BBLEERR
 		| USB_DIEP_INT_PKTDRPSTS
@@ -435,13 +435,13 @@ usb_ep_in_flag_complete(uint32_t v)      { return v & USB_DIEP_INT_XFERCOMPL; }
 static inline void
 usb_ep_in_transfer_size(unsigned int i, uint32_t packets, uint32_t size)
 {
-	USB->DIEP[i].TSIZ = (packets << _USB_DIEP_TSIZ_PKTCNT_SHIFT)
+	USB->DIEP[i-1].TSIZ = (packets << _USB_DIEP_TSIZ_PKTCNT_SHIFT)
 	                  | size;
 }
 static inline uint32_t
 usb_ep_in_bytes_left(unsigned int i)
 {
-	return USB->DIEP[i].TSIZ & _USB_DIEP_TSIZ_XFERSIZE_MASK;
+	return USB->DIEP[i-1].TSIZ & _USB_DIEP_TSIZ_XFERSIZE_MASK;
 }
 
 
@@ -449,12 +449,12 @@ usb_ep_in_bytes_left(unsigned int i)
 static inline const void *
 usb_ep_in_dma_address(unsigned int i)
 {
-	return (const void *)USB->DIEP[i].DMAADDR;
+	return (const void *)USB->DIEP[i-1].DMAADDR;
 }
 static inline void
 usb_ep_in_dma_address_set(unsigned int i, const void *addr)
 {
-	USB->DIEP[i].DMAADDR = (uint32_t)addr;
+	USB->DIEP[i-1].DMAADDR = (uint32_t)addr;
 }
 
 /* USB_DIEPx_TXFSTS */
@@ -561,34 +561,34 @@ usb_ep0out_dma_address_set(void *addr)
 static inline void
 usb_ep_out_enable(unsigned int i)
 {
-	USB->DOEP[i].CTL |= USB_DOEP_CTL_EPENA | USB_DOEP_CTL_CNAK;
+	USB->DOEP[i-1].CTL |= USB_DOEP_CTL_EPENA | USB_DOEP_CTL_CNAK;
 }
 static inline void
 usb_ep_out_enable_odd(unsigned int i)
 {
-	USB->DOEP[i].CTL |= USB_DOEP_CTL_EPENA | USB_DOEP_CTL_SETD1PIDOF | USB_DOEP_CTL_CNAK;
+	USB->DOEP[i-1].CTL |= USB_DOEP_CTL_EPENA | USB_DOEP_CTL_SETD1PIDOF | USB_DOEP_CTL_CNAK;
 }
 static inline void
 usb_ep_out_enable_even(unsigned int i)
 {
-	USB->DOEP[i].CTL |= USB_DOEP_CTL_EPENA | USB_DOEP_CTL_SETD0PIDEF | USB_DOEP_CTL_CNAK;
+	USB->DOEP[i-1].CTL |= USB_DOEP_CTL_EPENA | USB_DOEP_CTL_SETD0PIDEF | USB_DOEP_CTL_CNAK;
 }
 static inline void
 usb_ep_out_stall(unsigned int i)
 {
-	USB->DOEP[i].CTL |= USB_DOEP_CTL_STALL;
+	USB->DOEP[i-1].CTL |= USB_DOEP_CTL_STALL;
 }
 
 /* USB_DOEPx_INT */
 static inline uint32_t
 usb_ep_out_flags(unsigned int i)
 {
-	return USB->DOEP[i].INT;
+	return USB->DOEP[i-1].INT;
 }
 static inline void
 usb_ep_out_flags_clear(unsigned int i, uint32_t v)
 {
-	USB->DOEP[i].INT = v &
+	USB->DOEP[i-1].INT = v &
 		( USB_DOEP_INT_NAKINTRPT
 		| USB_DOEP_INT_BBLEERR
 		| USB_DOEP_INT_PKTDRPSTS
@@ -603,63 +603,63 @@ usb_ep_out_flags_clear(unsigned int i, uint32_t v)
 static inline uint32_t
 usb_ep_out_flag_nak(uint32_t v)                    { return v & USB_DOEP_INT_NAKINTRPT; }
 static inline void
-usb_ep_out_flag_nak_clear(unsigned int i)          { USB->DOEP[i].INT = USB_DOEP_INT_NAKINTRPT; }
+usb_ep_out_flag_nak_clear(unsigned int i)          { USB->DOEP[i-1].INT = USB_DOEP_INT_NAKINTRPT; }
 static inline uint32_t
 usb_ep_out_flag_babble(uint32_t v)                 { return v & USB_DOEP_INT_BBLEERR; }
 static inline void
-usb_ep_out_flag_babble_clear(unsigned int i)       { USB->DOEP[i].INT = USB_DOEP_INT_BBLEERR; }
+usb_ep_out_flag_babble_clear(unsigned int i)       { USB->DOEP[i-1].INT = USB_DOEP_INT_BBLEERR; }
 static inline uint32_t
 usb_ep_out_flag_packet_drop(uint32_t v)            { return v & USB_DOEP_INT_PKTDRPSTS; }
 static inline void
-usb_ep_out_flag_packet_drop_clear(unsigned int i)  { USB->DOEP[i].INT = USB_DOEP_INT_PKTDRPSTS; }
+usb_ep_out_flag_packet_drop_clear(unsigned int i)  { USB->DOEP[i-1].INT = USB_DOEP_INT_PKTDRPSTS; }
 static inline uint32_t
 usb_ep_out_flag_setup_b2b(uint32_t v)              { return v & USB_DOEP_INT_BACK2BACKSETUP; }
 static inline void
-usb_ep_out_flag_setup_b2b_clear(unsigned int i)    { USB->DOEP[i].INT = USB_DOEP_INT_BACK2BACKSETUP; }
+usb_ep_out_flag_setup_b2b_clear(unsigned int i)    { USB->DOEP[i-1].INT = USB_DOEP_INT_BACK2BACKSETUP; }
 static inline uint32_t
 usb_ep_out_flag_out_disabled(uint32_t v)           { return v & USB_DOEP_INT_OUTTKNEPDIS; }
 static inline void
-usb_ep_out_flag_out_disabled_clear(unsigned int i) { USB->DOEP[i].INT = USB_DOEP_INT_OUTTKNEPDIS; }
+usb_ep_out_flag_out_disabled_clear(unsigned int i) { USB->DOEP[i-1].INT = USB_DOEP_INT_OUTTKNEPDIS; }
 static inline uint32_t
 usb_ep_out_flag_setup(uint32_t v)                  { return v & USB_DOEP_INT_SETUP; }
 static inline void
-usb_ep_out_flag_setup_clear(unsigned int i)        { USB->DOEP[i].INT = USB_DOEP_INT_SETUP; }
+usb_ep_out_flag_setup_clear(unsigned int i)        { USB->DOEP[i-1].INT = USB_DOEP_INT_SETUP; }
 static inline uint32_t
 usb_ep_out_flag_ahb_error(uint32_t v)              { return v & USB_DOEP_INT_AHBERR; }
 static inline void
-usb_ep_out_flag_ahb_error_clear(unsigned int i)    { USB->DOEP[i].INT = USB_DOEP_INT_AHBERR; }
+usb_ep_out_flag_ahb_error_clear(unsigned int i)    { USB->DOEP[i-1].INT = USB_DOEP_INT_AHBERR; }
 static inline uint32_t
 usb_ep_out_flag_disabled(uint32_t v)               { return v & USB_DOEP_INT_EPDISBLD; }
 static inline void
-usb_ep_out_flag_disabled_clear(unsigned int i)     { USB->DOEP[i].INT = USB_DOEP_INT_EPDISBLD; }
+usb_ep_out_flag_disabled_clear(unsigned int i)     { USB->DOEP[i-1].INT = USB_DOEP_INT_EPDISBLD; }
 static inline uint32_t
 usb_ep_out_flag_complete(uint32_t v)               { return v & USB_DOEP_INT_XFERCOMPL; }
 static inline void
-usb_ep_out_flag_complete_clear(unsigned int i)     { USB->DOEP[i].INT = USB_DOEP_INT_XFERCOMPL; }
+usb_ep_out_flag_complete_clear(unsigned int i)     { USB->DOEP[i-1].INT = USB_DOEP_INT_XFERCOMPL; }
 
 /* USB_DOEPx_TSIZ */
 static inline void
 usb_ep_out_transfer_size(unsigned int i, uint32_t packets, uint32_t size)
 {
-	USB->DOEP[i].TSIZ = (packets << _USB_DOEP_TSIZ_PKTCNT_SHIFT)
+	USB->DOEP[i-1].TSIZ = (packets << _USB_DOEP_TSIZ_PKTCNT_SHIFT)
 	                  | size;
 }
 static inline uint32_t
 usb_ep_out_bytes_left(unsigned int i)
 {
-	return USB->DOEP[i].TSIZ & _USB_DOEP_TSIZ_XFERSIZE_MASK;
+	return USB->DOEP[i-1].TSIZ & _USB_DOEP_TSIZ_XFERSIZE_MASK;
 }
 
 /* USB_DOEPx_DMAADDR */
 static inline void *
 usb_ep_out_dma_address(unsigned int i)
 {
-	return (void *)USB->DOEP[i].DMAADDR;
+	return (void *)USB->DOEP[i-1].DMAADDR;
 }
 static inline void
 usb_ep_out_dma_address_set(unsigned int i, void *addr)
 {
-	USB->DOEP[i].DMAADDR = (uint32_t)addr;
+	USB->DOEP[i-1].DMAADDR = (uint32_t)addr;
 }
 
 /* USB_PCGCCTL */
