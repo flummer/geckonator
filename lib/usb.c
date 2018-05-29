@@ -206,15 +206,31 @@ usb_flags_enable(uint32_t v)             { USB->GINTMSK = v; }
 
 /* USB_GRXFSIZ */
 
-/* USB_GNPTXFSIZ */
-
 /* USB_GDFIFOCFG */
 
+/* USB_GNPTXFSIZ */
 /* USB_DIEPTXF1 */
-
 /* USB_DIEPTXF2 */
-
 /* USB_DIEPTXF3 */
+static inline void
+usb_allocate_buffers(uint32_t rx,
+		uint32_t tx0,
+		uint32_t tx1,
+		uint32_t tx2,
+		uint32_t tx3)
+{
+	/* round up to number of 32bit words */
+	rx  = (rx  + 3) >> 2;
+	tx0 = (tx0 + 3) >> 2;
+	tx1 = (tx1 + 3) >> 2;
+	tx2 = (tx2 + 3) >> 2;
+	tx3 = (tx3 + 3) >> 2;
+	USB->GRXFSIZ   = rx;
+	USB->GNPTXFSIZ = (tx0 << 16) | (rx);
+	USB->DIEPTXF1  = (tx1 << 16) | (rx + tx0);
+	USB->DIEPTXF2  = (tx2 << 16) | (rx + tx0 + tx1);
+	USB->DIEPTXF3  = (tx3 << 16) | (rx + tx0 + tx1 + tx2);
+}
 
 /* USB_DCFG */
 static inline void
