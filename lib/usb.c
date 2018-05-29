@@ -259,9 +259,24 @@ usb_remote_wakeup_set(void)
 
 /* USB_DSTS */
 static inline uint32_t
+usb_device_status(void)
+{
+	return USB->DSTS;
+}
+static inline uint32_t
 usb_enumerated_speed(void)
 {
 	return (USB->DSTS & _USB_DSTS_ENUMSPD_MASK) >> _USB_DSTS_ENUMSPD_SHIFT;
+}
+static inline uint32_t
+usb_frame_odd(uint32_t v)
+{
+	return v & 0x100;
+}
+static inline uint32_t
+usb_frame_number(uint32_t v)
+{
+	return (v >> 8) & 0x3FFF;
 }
 
 /* USB_DIEPMSK */
@@ -271,6 +286,21 @@ usb_enumerated_speed(void)
 /* USB_DAINT */
 static inline uint32_t
 usb_ep_flags(void)                       { return USB->DAINT; }
+static inline uint32_t
+usb_ep_flag_in(unsigned int i, uint32_t v)
+{
+	return v & (0x00000001 << i);
+}
+static inline uint32_t
+usb_ep_flag_out(unsigned int i, uint32_t v)
+{
+	return v & (0x00010000 << i);
+}
+static inline uint32_t
+usb_ep_flag_in_or_out(unsigned int i, uint32_t v)
+{
+	return v & (0x00010001 << i);
+}
 
 /* USB_DAINTMSX */
 
@@ -285,7 +315,7 @@ usb_ep0in_enable(void)
 static inline void
 usb_ep0in_stall(void)
 {
-	USB->DIEP0CTL |= USB_DIEP0CTL_SNAK | USB_DIEP0CTL_STALL;
+	USB->DIEP0CTL |= USB_DIEP0CTL_STALL;
 }
 
 /* USB_DIEP0INT */
@@ -359,7 +389,7 @@ usb_ep_in_enable(unsigned int i)
 static inline void
 usb_ep_in_stall(unsigned int i)
 {
-	USB->DIEP[i].CTL |= USB_DIEP_CTL_SNAK | USB_DIEP_CTL_STALL;
+	USB->DIEP[i].CTL |= USB_DIEP_CTL_STALL;
 }
 
 /* USB_DIEPx_INT */
@@ -416,10 +446,10 @@ usb_ep_in_bytes_left(unsigned int i)
 
 
 /* USB_DIEPx_DMAADDR */
-static inline uint32_t
+static inline const void *
 usb_ep_in_dma_address(unsigned int i)
 {
-	return USB->DIEP[i].DMAADDR;
+	return (const void *)USB->DIEP[i].DMAADDR;
 }
 static inline void
 usb_ep_in_dma_address_set(unsigned int i, const void *addr)
@@ -438,7 +468,7 @@ usb_ep0out_enable(void)
 static inline void
 usb_ep0out_enable_setup(void)
 {
-	USB->DOEP0CTL |= USB_DOEP0CTL_EPENA | USB_DOEP0CTL_SNAK | USB_DOEP0CTL_STALL;
+	USB->DOEP0CTL |= USB_DOEP0CTL_EPENA | USB_DOEP0CTL_STALL;
 }
 
 /* USB_DOEP0INT */
@@ -509,6 +539,11 @@ usb_ep0out_bytes_left(void)
 {
 	return USB->DOEP0TSIZ & _USB_DOEP0TSIZ_XFERSIZE_MASK;
 }
+static inline uint32_t
+usb_ep0out_setup_left(void)
+{
+	return USB->DOEP0TSIZ >> _USB_DOEP0TSIZ_SUPCNT_SHIFT;
+}
 
 /* USB_DOEP0DMAADDR */
 static inline void *
@@ -527,6 +562,21 @@ static inline void
 usb_ep_out_enable(unsigned int i)
 {
 	USB->DOEP[i].CTL |= USB_DOEP_CTL_EPENA | USB_DOEP_CTL_CNAK;
+}
+static inline void
+usb_ep_out_enable_odd(unsigned int i)
+{
+	USB->DOEP[i].CTL |= USB_DOEP_CTL_EPENA | USB_DOEP_CTL_SETD1PIDOF | USB_DOEP_CTL_CNAK;
+}
+static inline void
+usb_ep_out_enable_even(unsigned int i)
+{
+	USB->DOEP[i].CTL |= USB_DOEP_CTL_EPENA | USB_DOEP_CTL_SETD0PIDEF | USB_DOEP_CTL_CNAK;
+}
+static inline void
+usb_ep_out_stall(unsigned int i)
+{
+	USB->DOEP[i].CTL |= USB_DOEP_CTL_STALL;
 }
 
 /* USB_DOEPx_INT */
@@ -601,10 +651,10 @@ usb_ep_out_bytes_left(unsigned int i)
 }
 
 /* USB_DOEPx_DMAADDR */
-static inline uint32_t
+static inline void *
 usb_ep_out_dma_address(unsigned int i)
 {
-	return USB->DOEP[i].DMAADDR;
+	return (void *)USB->DOEP[i].DMAADDR;
 }
 static inline void
 usb_ep_out_dma_address_set(unsigned int i, void *addr)
