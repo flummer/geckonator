@@ -23,7 +23,12 @@
 #include "lib/clock.c"
 #include "lib/gpio.c"
 #include "lib/leuart0.c"
+#include "lib/usart1.c"
+#include "lib/timer1.c"
+#include "lib/timer2.c"
 #include "lib/usb.c"
+#include "lib/dma.c"
+#include "lib/prs.c"
 
 #define LEUART_DEBUG
 #ifdef NDEBUG
@@ -41,13 +46,22 @@
 #define USB_TRIPLE(x) ((x) & 0xFF),(((x) >> 8) & 0xFF),((x) >> 16)
 #define USB_QUAD(x) ((x) & 0xFF),(((x) >> 8) & 0xFF),(((x) >> 16) & 0xFF),((x) >> 24)
 
-#define USB_FIFO_RXSIZE  256
+#define USB_FIFO_RXSIZE  512
 #define USB_FIFO_TX0SIZE 128
-#define USB_FIFO_TX1SIZE 0
-#define USB_FIFO_TX2SIZE 0
+#define USB_FIFO_TX1SIZE 64
+#define USB_FIFO_TX2SIZE 64
 #define USB_FIFO_TX3SIZE 0
 
-#define DFU_INTERFACE 0
+#define AC_INTERFACE 0
+#define AC_ENDPOINT 2
+#define AC_PACKETSIZE 2
+
+#define AS_INTERFACE 1
+#define AS_ENDPOINT 1
+#define AS_PACKETSIZE 196
+#define AS_DMA 0
+
+#define DFU_INTERFACE 2
 
 struct usb_packet_setup {
 	union {
@@ -117,13 +131,139 @@ static const __align(4) struct usb_descriptor_device usb_descriptor_device = {
 static const __align(4) struct usb_descriptor_configuration usb_descriptor_configuration1 = {
 	.bLength              = 9,
 	.bDescriptorType      = 0x02, /* Configuration */
-	.wTotalLength         = 9 + 18,
-	.bNumInterfaces       = 1,
+	.wTotalLength         = 9 + 122 + 18,
+	.bNumInterfaces       = 2 + 1,
 	.bConfigurationValue  = 1,
 	.iConfiguration       = 0,
 	.bmAttributes         = 0x80,
 	.bMaxPower            = 250,
 	.rest = {
+	/* Interface */
+	/* .bLength                */ 9,
+	/* .bDescriptorType        */ 0x04, /* Interface */
+	/* .bInterfaceNumber       */ AC_INTERFACE,
+	/* .bAlternateSetting      */ 0,
+	/* .bNumEndpoints          */ 1,
+	/* .bInterfaceClass        */ 0x01, /* 0x01 = Audio */
+	/* .bInterfaceSubClass     */ 0x01, /* 0x01 = Audio Control */
+	/* .bInterfaceProtocol     */ 0x00, /* 0x00 = Interface Protocol Version 1.0 */
+	/* .iInterface             */ 0,
+	/* AudioControl Interface: Header */
+	/* .bLength                */ 9,
+	/* .bDescriptorType        */ 0x24, /* CS_INTERFACE */
+	/* .bDescriptorSubtype     */ 0x01, /* 0x01 = Header */
+	/* .bcdADC                 */ USB_WORD(0x0100),
+	/* .wTotalLength           */ USB_WORD(43),
+	/* .bInCollection          */ 1,
+	/* .baInterfaceNr(1)       */ AS_INTERFACE,
+	/* AudioControl Interface: Input Terminal */
+	/* .bLength                */ 12,
+	/* .bDescriptorType        */ 0x24, /* CS_INTERFACE */
+	/* .bDescriptorSubtype     */ 0x02, /* Input Terminal */
+	/* .bTerminalID            */ 1,
+	/* .wTerminalType          */ USB_WORD(0x0101), /* 0x0101 = USB Streaming */
+	/* .bAssocTerminal         */ 0, /* none */
+	/* .bNrChannels            */ 2,
+	/* .wChannelConfig         */ USB_WORD(0x0003),
+	/* .iChannelNames          */ 0,
+	/* .iTerminal              */ 5,
+	/* AudioControl Interface: Feature Unit */
+	/* .bLength                */ 13, /* 7 + n * (1 + channels) */
+	/* .bDescriptorType        */ 0x24, /* CS_INTERFACE */
+	/* .bDescriptorSubtype     */ 0x06, /* Feature Unit */
+	/* .bUnitID                */ 2,
+	/* .bSourceID              */ 1, /* id of input terminal above */
+	/* .bControlSize           */ 2,
+	/* .bmaControls(0) master  */ USB_WORD(0x0003), /* Mute + Volume Control */
+	/* .bmaControls(1) left    */ USB_WORD(0x0000),
+	/* .bmaControls(2) right   */ USB_WORD(0x0000),
+	/* .iFeature               */ 0,
+	/* AudioControl Interface: Output Terminal */
+	/* .bLength                */ 9,
+	/* .bDescriptorType        */ 0x24, /* CS_INTERFACE */
+	/* .bDescriptorSubtype     */ 0x03, /* Output Terminal */
+	/* .bTerminalID            */ 3,
+#if 0
+	/* .wTerminalType          */ USB_WORD(0x0305), /* 0x0305 = Room Speaker */
+#elif 0
+	/* .wTerminalType          */ USB_WORD(0x0302), /* 0x0302 = Headphones */
+#else
+	/* .wTerminalType          */ USB_WORD(0x0603), /* 0x0603 = Line Connector */
+#endif
+	/* .bAssocTerminal         */ 0, /* none */
+	/* .bSourceID              */ 2, /* id of feature unit above */
+	/* .iTerminal              */ 0,
+	/* Endpoint */
+	/* .bLength                */ 9,
+	/* .bDescriptorType        */ 0x05, /* Endpoint */
+	/* .bEndpointAddress       */ 0x80 | AC_ENDPOINT, /* in */
+	/* .bmAttributes           */ 0x03, /* interrupt */
+	/* .wMaxPacketSize         */ USB_WORD(AC_PACKETSIZE),
+	/* .bInterval              */ 100, /* check every 100ms */
+	/* .bRefresh               */ 0,
+	/* .bSynchAddress          */ 0x00,
+	/* Interface */
+	/* .bLength                */ 9,
+	/* .bDescriptorType        */ 0x04, /* Interface */
+	/* .bInterfaceNumber       */ AS_INTERFACE,
+	/* .bAlternateSetting      */ 0,
+	/* .bNumEndpoints          */ 0,
+	/* .bInterfaceClass        */ 0x01, /* 0x01 = Audio */
+	/* .bInterfaceSubClass     */ 0x02, /* 0x02 = Audio Streaming */
+	/* .bInterfaceProtocol     */ 0x00, /* 0x00 = Interface Protocol Version 1.0 */
+	/* .iInterface             */ 0,
+	/* Interface */
+	/* .bLength                */ 9,
+	/* .bDescriptorType        */ 0x04, /* Interface */
+	/* .bInterfaceNumber       */ AS_INTERFACE,
+	/* .bAlternateSetting      */ 1,
+	/* .bNumEndpoints          */ 2,
+	/* .bInterfaceClass        */ 0x01, /* 0x01 = Audio */
+	/* .bInterfaceSubClass     */ 0x02, /* 0x02 = Audio Streaming */
+	/* .bInterfaceProtocol     */ 0x00, /* 0x00 = Interface Protocol Version 1.0 */
+	/* .iInterface             */ 0,
+	/* AudioStreaming Interface: General */
+	/* .bLength                */ 7,
+	/* .bDescriptorType        */ 0x24, /* CS_INTERFACE */
+	/* .bDescriptorSubtype     */ 0x01, /* General */
+	/* .bTerminalLink          */ 1, /* id of input terminal above */
+	/* .bDelay                 */ 1,
+	/* .wFormatTag             */ USB_WORD(0x0001), /* PCM format */
+	/* AudioStreaming Interface: Format Type 1 */
+	/* .bLength                */ 11,
+	/* .bDescriptorType        */ 0x24, /* CS_INTERFACE */
+	/* .bDescriptorSubtype     */ 0x02, /* Format Type */
+	/* .bFormatType            */ 0x01, /* 0x01 = Type 1 */
+	/* .bNrChannels            */ 2,
+	/* .bSubFrameSize          */ 2,    /* 2 bytes */
+	/* .bBitResolution         */ 16,   /* 16 bit resolution */
+	/* .bSamFreqType           */ 1,    /* one sampling frequency */
+	/* .tSamFreq               */ USB_TRIPLE(48000),
+	/* Endpoint */
+	/* .bLength                */ 9,
+	/* .bDescriptorType        */ 0x05, /* Endpoint */
+	/* .bEndpointAddress       */ AS_ENDPOINT, /* out */
+	/* .bmAttributes           */ 0x05, /* Isochronous, async */
+	/* .wMaxPacketSize         */ USB_WORD(AS_PACKETSIZE),
+	/* .bInterval              */ 1,
+	/* .bRefresh               */ 0,
+	/* .bSynchAddress          */ 0x80 | AS_ENDPOINT,
+	/* AudioStreaming Endpoint: General */
+	/* .bLength                */ 7,
+	/* .bDescriptorType        */ 0x25, /* CS_ENDPOINT */
+	/* .bDescriptorSubtype     */ 0x01, /* General */
+	/* .bmAttributes           */ 0x00, /* No freq control, no pitch control */
+	/* .bLockDelayUnits        */ 0,
+	/* .wLockDelay             */ USB_WORD(0),
+	/* Endpoint */
+	/* .bLength                */ 9,
+	/* .bDescriptorType        */ 0x05, /* Endpoint */
+	/* .bEndpointAddress       */ 0x80 | AS_ENDPOINT, /* in */
+	/* .bmAttributes           */ 0x11, /* Isochronous, feedback */
+	/* .wMaxPacketSize         */ USB_WORD(3),
+	/* .bInterval              */ 1,
+	/* .bRefresh               */ 2, /* 1 is valid, but doesn't work with windows */
+	/* .bSynchAddress          */ 0x00,
 	/* Interface */
 	/* .bLength                */ 9,
 	/* .bDescriptorType        */ 0x04, /* Interface */
@@ -165,10 +305,10 @@ static const __align(4) struct usb_descriptor_string usb_descriptor_vendor = {
 };
 
 static const __align(4) struct usb_descriptor_string usb_descriptor_product = {
-	.bLength         = 22,
+	.bLength         = 26,
 	.bDescriptorType = 0x03, /* String */
 	.wCodepoint = {
-		'G','e','c','k','o','n','a','t','o','r',
+		'G','e','c','k','o','B','l','a','s','t','e','r'
 	},
 };
 
@@ -190,17 +330,29 @@ static const __align(4) struct usb_descriptor_string usb_descriptor_dfu = {
 	},
 };
 
+static const __align(4) struct usb_descriptor_string usb_descriptor_test = {
+	.bLength         = 26,
+	.bDescriptorType = 0x03, /* String */
+	.wCodepoint = {
+		'C','r','a','z','y',' ','S','o','u','n','d','s',
+	},
+};
+
 static const struct usb_descriptor_string *const usb_descriptor_string[] = {
 	&usb_descriptor_string0,
 	&usb_descriptor_vendor,
 	&usb_descriptor_product,
 	&usb_descriptor_serial,
 	&usb_descriptor_dfu,
+	&usb_descriptor_test,
 };
+
+static DMA_DESCRIPTORS(dma);
 
 static struct {
 	uint32_t bytes;
 	uint32_t packetsize;
+	uint8_t out_disabling;
 } usb_state;
 
 static __uninitialized uint32_t usb_outbuf[
@@ -214,6 +366,23 @@ static __uninitialized union {
 	int32_t  i32[1];
 	uint32_t u32[1];
 } usb_inbuf;
+
+static void
+usb_ep_out_disable_start(unsigned int nr)
+{
+	usb_state.out_disabling++;
+	usb_global_out_nak_set();
+	usb_ep_out_disable(nr);
+}
+
+static void
+usb_ep_out_disable_done(unsigned int nr)
+{
+	if (--usb_state.out_disabling == 0)
+		usb_global_out_nak_clear();
+	usb_ep_out_config_disabled(nr);
+	usb_ep_flag_out_disable(nr);
+}
 
 #ifdef LEUART_DEBUG
 static struct {
@@ -262,6 +431,136 @@ _write(int fd, const uint8_t *ptr, size_t len)
 }
 #endif
 
+static const uint16_t pwm_steps[] = {
+	0, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233, 377, 610,
+	987, 1597, 2584, 4181, 6765, 10946, 17711, 28657, 46368
+};
+
+static uint8_t usbac_mute;
+static int16_t usbac_volume;
+#define USBAC_RES 256
+#define USBAC_MIN (-(int16_t)(ARRAY_SIZE(pwm_steps) - 1) * 256)
+#define USBAC_MAX (0 * 256)
+
+static __align(4) struct {
+	uint8_t bStatusType;
+	uint8_t bOriginator;
+} usbac_inbuf;
+
+static volatile uint32_t usbas_feedback;
+
+struct usbas_buf {
+	uint32_t samples;
+	union {
+		uint8_t byte[AS_PACKETSIZE];
+		uint32_t word[AS_PACKETSIZE/sizeof(uint32_t)];
+	};
+};
+
+static struct usbas_buf usbas_buf[3];
+static struct usbas_buf *volatile usbas_next;
+static struct usbas_buf *volatile dma_next;
+
+static struct usbas_buf *
+usbas_nextbuf(struct usbas_buf *p)
+{
+	p++;
+	if (p > &usbas_buf[ARRAY_SIZE(usbas_buf) - 1])
+		p = &usbas_buf[0];
+	return p;
+}
+
+static void
+pwm_init(void)
+{
+	clock_timer2_enable();
+	timer2_config(TIMER_CONFIG_UP);
+	timer2_pins(TIMER_PINS_LOCATION0
+	          /*| TIMER_PINS_CC2_ENABLE */
+	          /*| TIMER_PINS_CC1_ENABLE */
+	          | TIMER_PINS_CC0_ENABLE);
+	timer2_top_set(pwm_steps[ARRAY_SIZE(pwm_steps)-1]);
+	timer2_cc_config(0, TIMER_CC_CONFIG_PWM | TIMER_CC_CONFIG_INVERT);
+	/*
+	timer2_cc_config(1, TIMER_CC_CONFIG_PWM | TIMER_CC_CONFIG_INVERT);
+	timer2_cc_config(2, TIMER_CC_CONFIG_PWM | TIMER_CC_CONFIG_INVERT);
+	*/
+}
+
+static inline void
+pwm_on(void)
+{
+	timer2_start();
+}
+
+static inline void
+pwm_off(void)
+{
+	timer2_stop();
+}
+
+static void
+pwm_set(void)
+{
+	unsigned int i;
+
+	if (!usbac_mute) {
+		i = (int)usbac_volume - USBAC_MIN;
+		i *= ARRAY_SIZE(pwm_steps) - 1;
+		i += (USBAC_MAX - USBAC_MIN)/2;
+		i /= USBAC_MAX - USBAC_MIN;
+	} else
+		i = 0;
+
+	timer2_cc_buffer_set(0, pwm_steps[i]);
+}
+
+static void
+dma_zerosamples(struct dma_descriptor *d, unsigned int samples)
+{
+	static const int16_t zerosample;
+
+	d->src_end = (void*)&zerosample;
+	d->control =
+		  (3 << 30)  /* dst_inc, no increment */
+		| (1 << 28)  /* dst_size, 2 bytes */
+		| (3 << 26)  /* src_inc, no increment */
+		| (1 << 24)  /* src_size, 2 bytes */
+		| (0 << 21)  /* dst_prot_ctrl, non-privileged */
+		| (0 << 18)  /* src_prot_ctrl, non-privileged */
+		| (0 << 14)  /* R_power, arbitrate everytime */
+		| ((2*samples - 1) << 4) /* n_minus_1 */
+		| (0 <<  3)  /* next_useburst, for scatter-gather */
+		| (3 <<  0); /* cycle_ctrl, ping-pong */
+	d->user = samples;
+}
+
+static void
+usbac_notify_host(void)
+{
+	usbac_inbuf.bStatusType = 0x00; /* 0x00 = Audio Control interface */
+	usbac_inbuf.bOriginator = 2;
+	usb_ep_in_dma_address_set(AC_ENDPOINT, &usbac_inbuf);
+	usb_ep_in_transfer_size(AC_ENDPOINT, 1, 2);
+	usb_ep_in_enable(AC_ENDPOINT);
+}
+
+static void
+usbac_mute_set(uint8_t v)
+{
+	usbac_mute = v;
+	debug("  mute = %hu\r\n", usbac_mute);
+	pwm_set();
+}
+
+static void
+usbac_volume_set(int16_t v)
+{
+	usbac_volume = v;
+	debug("  volume = %hd\r\n", usbac_volume);
+	pwm_set();
+}
+
 static void
 dumpsetup(const struct usb_packet_setup *p)
 {
@@ -277,6 +576,38 @@ dumpsetup(const struct usb_packet_setup *p)
 		p->wValue,
 		p->wIndex,
 		p->wLength);
+}
+
+static void
+dumpreq(const struct usb_packet_setup *p)
+{
+#ifndef NDEBUG
+	uint8_t iface = p->wIndex & 0xFF;
+	uint8_t unit = p->wIndex >> 8;
+	uint8_t channel = p->wValue & 0xFF;
+	uint8_t control = p->wValue >> 8;
+	const char *typ;
+	const char *req;
+
+	if (p->bRequest & 0x80)
+		typ = "GET";
+	else
+		typ = "SET";
+
+	switch (p->bRequest & 0x7F) {
+	case 1: req = "CUR"; break;
+	case 2: req = "MIN"; break;
+	case 3: req = "MAX"; break;
+	case 4: req = "RES"; break;
+	case 5: req = "MEM"; break;
+	case 0x7f: req = "STAT"; break;
+	default: req = "UNKNOWN"; break;
+	}
+
+	debug("%s_%s: iface = %hu, unit = %hu, "
+	      "control = %hu, channel = %hu, wLength = %hu\r\n",
+			typ, req, iface, unit, control, channel, p->wLength);
+#endif
 }
 
 static void
@@ -378,6 +709,20 @@ usb_handle_get_status_device(const struct usb_packet_setup *p, const void **data
 }
 
 static int
+usb_handle_get_status_endpoint(const struct usb_packet_setup *p, const void **data)
+{
+	debug("GET_STATUS endpoint\r\n");
+
+	if (p->wIndex == AS_ENDPOINT) {
+		usb_inbuf.u16[0] = 0;
+		*data = &usb_inbuf;
+		return 2;
+	}
+
+	return -1;
+}
+
+static int
 usb_handle_set_address(const struct usb_packet_setup *p, const void **data)
 {
 	debug("SET_ADDRESS: wValue = %hu\r\n", p->wValue);
@@ -466,8 +811,12 @@ usb_handle_set_configuration(const struct usb_packet_setup *p, const void **data
 	debug("SET_CONFIGURATION: wIndex = %hu, wValue = %hu\r\n",
 			p->wIndex, p->wValue);
 
-	if (p->wIndex == 0 && p->wValue == usb_descriptor_configuration[0]->bConfigurationValue)
+	if (p->wIndex == 0 && p->wValue == usb_descriptor_configuration[0]->bConfigurationValue) {
+		/* configure audio control interrupt endpoint */
+		usb_ep_in_config_interrupt(AC_ENDPOINT, AC_PACKETSIZE);
+		usb_ep_flag_in_enable(AC_ENDPOINT);
 		return 0;
+	}
 
 	return -1;
 }
@@ -476,6 +825,53 @@ static int
 usb_handle_set_interface(const struct usb_packet_setup *p, const void **data)
 {
 	debug("SET_INTERFACE: wIndex = %hu, wValue = %hu\r\n", p->wIndex, p->wValue);
+
+	if (p->wIndex == AC_INTERFACE && p->wValue == 0)
+		return 0;
+
+	if (p->wIndex == AS_INTERFACE) {
+		switch (p->wValue) {
+		case 0:
+			usb_low_energy_enable();
+			if (usb_ep_in_active(AS_ENDPOINT))
+				usb_ep_in_disable(AS_ENDPOINT);
+			if (usb_ep_out_active(AS_ENDPOINT))
+				usb_ep_out_disable_start(AS_ENDPOINT);
+			usart1_trigger_config(0);
+			dma_next = NULL;
+			return 0;
+		case 1:
+			usb_low_energy_disable();
+			usbas_feedback = 48 << 14;
+			usb_ep_in_dma_address_set(AS_ENDPOINT, (void *)&usbas_feedback);
+			usb_ep_in_transfer_size(AS_ENDPOINT, 1, 3);
+			usb_ep_in_config_iso_enabled(AS_ENDPOINT, 3);
+
+			usbas_next = dma_next = &usbas_buf[0];
+			usb_ep_out_dma_address_set(AS_ENDPOINT, usbas_buf[0].word);
+			usb_ep_out_transfer_size(AS_ENDPOINT, 1, AS_PACKETSIZE);
+			usb_ep_out_config_iso_enabled(AS_ENDPOINT, AS_PACKETSIZE);
+
+			usb_ep_flag_inout_enable(AS_ENDPOINT);
+
+			dma_channel_disable(AS_DMA);
+			dma_channel_alternate_disable(AS_DMA);
+			usart1_tx_disable();
+			usart1_tx_clear();
+			/* there is a bug in the EFM32 usart,
+			 * so we need to disable i2s mode to
+			 * reset its internal state properly */
+			usart1_i2s_disable();
+			dma_zerosamples(&dma.primary[AS_DMA],   48);
+			dma_zerosamples(&dma.alternate[AS_DMA], 48);
+			usart1_i2s_16bit_stereo();
+			dma_channel_enable(AS_DMA);
+			/* enable tx at next usb sof */
+			usart1_trigger_config(USART_TRIGCTRL_TXTEN | USART_TRIGCTRL_TSEL_PRSCH0);
+			return 0;
+		}
+	}
+
 	return -1;
 }
 
@@ -483,6 +879,132 @@ static int
 usb_handle_clear_feature_endpoint(const struct usb_packet_setup *p, const void **data)
 {
 	debug("CLEAR_FEATURE endpoint %hu\r\n", p->wIndex);
+
+	if (p->wIndex == AS_ENDPOINT)
+		return 0;
+
+	return -1;
+}
+
+static int
+usb_handle_set_cur(const struct usb_packet_setup *p, const void **data)
+{
+	dumpreq(p);
+
+	if (p->wIndex == (0x0200 | AC_INTERFACE) && p->wValue == 0x0100) {
+		if (p->wLength != 1)
+			return -1;
+
+		const uint8_t *v = *data;
+		usbac_mute_set(*v);
+		return 0;
+	}
+
+	if (p->wIndex == (0x0200 | AC_INTERFACE) && p->wValue == 0x0200) {
+		if (p->wLength != 2)
+			return -1;
+
+		const int16_t *v = *data;
+		usbac_volume_set(*v);
+		return 0;
+	}
+
+	return -1;
+}
+
+static int
+usb_handle_set_res(const struct usb_packet_setup *p, const void **data)
+{
+	dumpreq(p);
+
+	if (p->wIndex == (0x0200 | AC_INTERFACE) && p->wValue == 0x0200) {
+		if (p->wLength != 2)
+			return -1;
+#ifndef NDEBUG
+		const int16_t *v = *data;
+		debug("  res = %hd\r\n", *v);
+#endif
+	}
+
+	return -1;
+}
+
+
+static int
+usb_handle_get_cur(const struct usb_packet_setup *p, const void **data)
+{
+	dumpreq(p);
+
+	if (p->wIndex == (0x0200 | AC_INTERFACE) && p->wValue == 0x0100) {
+		usb_inbuf.u8[0] = usbac_mute;
+		*data = &usb_inbuf;
+		return 1;
+	}
+
+	if (p->wIndex == (0x0200 | AC_INTERFACE) && p->wValue == 0x0200) {
+		usb_inbuf.u16[0] = usbac_volume;
+		*data = &usb_inbuf;
+		return 2;
+	}
+
+	return -1;
+}
+
+static int
+usb_handle_get_min(const struct usb_packet_setup *p, const void **data)
+{
+	dumpreq(p);
+
+	if (p->wIndex == (0x0200 | AC_INTERFACE) && p->wValue == 0x0200) {
+		usb_inbuf.i16[0] = USBAC_MIN;
+		*data = &usb_inbuf;
+		debug("  returning %hd\r\n", USBAC_MIN);
+		return 2;
+	}
+
+	return -1;
+}
+
+static int
+usb_handle_get_max(const struct usb_packet_setup *p, const void **data)
+{
+	dumpreq(p);
+
+	if (p->wIndex == (0x0200 | AC_INTERFACE) && p->wValue == 0x0200) {
+		usb_inbuf.i16[0] = USBAC_MAX;
+		*data = &usb_inbuf;
+		debug("  returning %hd\r\n", USBAC_MAX);
+		return 2;
+	}
+
+	return -1;
+}
+
+static int
+usb_handle_get_res(const struct usb_packet_setup *p, const void **data)
+{
+	dumpreq(p);
+
+	if (p->wIndex == (0x0200 | AC_INTERFACE) && p->wValue == 0x0200) {
+		usb_inbuf.i16[0] = USBAC_RES;
+		*data = &usb_inbuf;
+		debug("  returning %hd\r\n", USBAC_RES);
+		return 2;
+	}
+
+	return -1;
+}
+
+static int
+usb_handle_get_stat(const struct usb_packet_setup *p, const void **data)
+{
+	dumpreq(p);
+
+	if ((p->wIndex & 0xff) == AC_INTERFACE && p->wValue == 0) {
+		*data = &usb_inbuf;
+		return 0;
+	}
+
 	return -1;
 }
 
@@ -509,12 +1031,20 @@ struct usb_setup_handler {
 
 static const struct usb_setup_handler usb_setup_handlers[] = {
 	{ .req = 0x0080, .len = -1, .fn = usb_handle_get_status_device },
+	{ .req = 0x0082, .len = -1, .fn = usb_handle_get_status_endpoint },
 	{ .req = 0x0500, .len =  0, .fn = usb_handle_set_address },
 	{ .req = 0x0680, .len = -1, .fn = usb_handle_get_descriptor },
 	{ .req = 0x0880, .len = -1, .fn = usb_handle_get_configuration },
 	{ .req = 0x0900, .len =  0, .fn = usb_handle_set_configuration },
 	{ .req = 0x0b01, .len =  0, .fn = usb_handle_set_interface },
 	{ .req = 0x0102, .len =  0, .fn = usb_handle_clear_feature_endpoint },
+	{ .req = 0x0121, .len = -1, .fn = usb_handle_set_cur },
+	{ .req = 0x0421, .len = -1, .fn = usb_handle_set_res },
+	{ .req = 0x81a1, .len = -1, .fn = usb_handle_get_cur },
+	{ .req = 0x82a1, .len = -1, .fn = usb_handle_get_min },
+	{ .req = 0x83a1, .len = -1, .fn = usb_handle_get_max },
+	{ .req = 0x84a1, .len = -1, .fn = usb_handle_get_res },
+	{ .req = 0xffa1, .len = -1, .fn = usb_handle_get_stat },
 	{ .req = 0x0021, .len =  0, .fn = usb_handle_dfu_detach },
 };
 
@@ -606,7 +1136,7 @@ usb_handle_ep0(void)
 	usb_ep0out_flags_clear(oflags);
 	usb_ep0in_flags_clear(iflags);
 
-	debug("EP0 %04lx %04lx %lu\r\n", oflags, iflags, usb_state.bytes);
+	//debug("EP0 %04lx %04lx %lu\r\n", oflags, iflags, usb_state.bytes);
 
 	if (usb_ep0out_flag_setup(oflags)) {
 		usb_handle_setup();
@@ -660,12 +1190,78 @@ usb_handle_ep0(void)
 }
 
 static void
+usb_handle_audio_streaming_feedback(void)
+{
+	uint32_t flags = usb_ep_in_flags(AS_ENDPOINT);
+
+	usb_ep_in_flags_clear(AS_ENDPOINT, flags);
+
+	if (usb_ep_in_flag_disabled(flags)) {
+		usb_ep_flag_in_disable(AS_ENDPOINT);
+		usb_fifo_tx_flush(AS_ENDPOINT);
+		usb_ep_in_config_disabled(AS_ENDPOINT);
+		return;
+	}
+
+	if (usb_ep_in_flag_complete(flags)) {
+		usb_ep_in_dma_address_set(AS_ENDPOINT, (void *)&usbas_feedback);
+		usb_ep_in_transfer_size(AS_ENDPOINT, 1, 3);
+		usb_ep_in_enable(AS_ENDPOINT);
+	}
+}
+
+static void
+usb_handle_audio_streaming_out(void)
+{
+	uint32_t flags = usb_ep_out_flags(AS_ENDPOINT);
+
+	usb_ep_out_flags_clear(AS_ENDPOINT, flags);
+
+	if (usb_ep_out_flag_disabled(flags)) {
+		usb_ep_out_disable_done(AS_ENDPOINT);
+		return;
+	}
+
+	if (usb_ep_out_flag_complete(flags)) {
+		uint32_t bytes = AS_PACKETSIZE - usb_ep_out_bytes_left(AS_ENDPOINT);
+		struct usbas_buf *next = usbas_next;
+
+		if ((bytes & 3) || bytes < 47*4) {
+			debug("wat? received %lu bytes\r\n", bytes);
+		} else if (next == dma_next) {
+			next->samples = bytes/4;
+			next = usbas_nextbuf(next);
+			usbas_next = next;
+		}
+		usb_ep_out_dma_address_set(AS_ENDPOINT, next->word);
+		usb_ep_out_transfer_size(AS_ENDPOINT, 1, AS_PACKETSIZE);
+		usb_ep_out_enable(AS_ENDPOINT);
+	}
+}
+
+static void
+usb_handle_audio_control_in(void)
+{
+	uint32_t flags = usb_ep_in_flags(AC_ENDPOINT);
+
+	usb_ep_in_flags_clear(AC_ENDPOINT, flags);
+
+	debug("AC IN\r\n");
+}
+
+static void
 usb_handle_endpoints(void)
 {
 	uint32_t flags = usb_ep_flags();
 
 	if (usb_ep_flag_in_or_out(0, flags))
 		usb_handle_ep0();
+	if (usb_ep_flag_in(AS_ENDPOINT, flags))
+		usb_handle_audio_streaming_feedback();
+	if (usb_ep_flag_out(AS_ENDPOINT, flags))
+		usb_handle_audio_streaming_out();
+	if (usb_ep_flag_in(AC_ENDPOINT, flags))
+		usb_handle_audio_control_in();
 }
 
 void
@@ -777,6 +1373,122 @@ usb_init(void)
 	usb_connect();
 }
 
+static uint32_t
+usbas_calculate_feedback(uint32_t p, int32_t ts, unsigned int samples)
+{
+#ifndef NDEBUG
+	static unsigned int count;
+#endif
+	static int32_t last_ts;
+	uint32_t t = p + ts - last_ts;
+	uint32_t r = samples * p;
+
+	r -= 46*t;
+	r <<= 15;
+	r += t;
+	r /= t;
+	r >>= 1;
+	r += 46 << 14;
+
+	if (ts > 750 || ts < -750)
+		r -= ts/8;
+
+#ifndef NDEBUG
+	count++;
+	if (count == 100) {
+		count = 0;
+		debug("DMA: %lu %ld %u\r\n", r, ts, samples);
+	}
+#endif
+
+	last_ts = ts;
+	return r;
+}
+
+void
+DMA_IRQHandler(void)
+{
+	int32_t ts = timer1_counter();
+	uint32_t flags = dma_flags();
+	struct usbas_buf *next;
+	struct dma_descriptor *d;
+	uint32_t p;
+
+	dma_flags_clear(flags);
+	gpio_clear(LED_BLUE);
+
+	next = dma_next;
+	if (!next)
+		goto out;
+
+	p = timer1_cc_value(0) + 1;
+	if (ts > 12000)
+		ts -= p;
+
+	if (dma_channel_alternate(AS_DMA))
+		d = &dma.primary[AS_DMA];
+	else
+		d = &dma.alternate[AS_DMA];
+
+	usbas_feedback = usbas_calculate_feedback(p, ts, d->user);
+
+	if (next == usbas_next) {
+		unsigned int samples;
+
+		if (ts > 500)
+			samples = 47;
+		else if (ts < -500)
+			samples = 49;
+		else
+			samples = 48;
+		dma_zerosamples(d, samples);
+		goto out;
+	}
+	if (ts > 4000 && next->samples >= 48) /* drop last sample */
+		next->samples--;
+	if (ts < -4000 && next->samples <= 48) { /* duplicate last sample */
+		uint32_t tmp = next->word[next->samples-1];
+
+		next->word[next->samples] = tmp;
+		next->samples++;
+	}
+	d->src_end = &next->byte[4*next->samples - 2];
+	d->control =
+		  (3 << 30)  /* dst_inc, no increment */
+		| (1 << 28)  /* dst_size, 2 bytes */
+		| (1 << 26)  /* src_inc, 2 bytes */
+		| (1 << 24)  /* src_size, 2 bytes */
+		| (0 << 21)  /* dst_prot_ctrl, non-privileged */
+		| (0 << 18)  /* src_prot_ctrl, non-privileged */
+		| (0 << 14)  /* R_power, arbitrate everytime */
+		| ((2*next->samples - 1) << 4) /* n_minus_1 */
+		| (0 <<  3)  /* next_useburst, for scatter-gather */
+		| (3 <<  0); /* cycle_ctrl, ping-pong */
+	d->user = next->samples;
+
+	dma_next = usbas_nextbuf(next);
+out:
+	gpio_set(LED_BLUE);
+}
+
+void
+TIMER1_IRQHandler(void)
+{
+	uint32_t flags = timer1_flags();
+	static unsigned int count;
+	static uint32_t sum;
+
+	timer1_flags_clear(flags);
+
+	sum += timer1_cc_value(0) + 1;
+	count += 1;
+	if (count == 1000) {
+		debug("T%lu\r\n", sum);
+		sum = 0;
+		count = 0;
+	}
+}
+
 static inline uint8_t
 system_getprodrev(void)
 {
@@ -808,6 +1520,10 @@ main(void)
 	clock_lfrco_enable();
 	clock_hfrco_disable();
 	clock_auxhfrco_enable();
+
+	clock_dma_enable();
+	clock_peripheral_div1();
+	clock_usart1_enable();
 
 	clock_le_enable();
 #ifdef LEUART_DEBUG
@@ -848,6 +1564,72 @@ main(void)
 	NVIC_SetPriority(LEUART0_IRQn, 2);
 	NVIC_EnableIRQ(LEUART0_IRQn);
 #endif
+
+	clock_prs_enable();
+	prs_channel_config(0, PRS_SOURCE_USB_SOF | PRS_EDGE_BOTH);
+
+	clock_timer1_enable();
+	timer1_config(TIMER_CONFIG_UP
+			| TIMER_CTRL_RISEA_RELOADSTART);
+	timer1_cc_config(0, TIMER_CC_CONFIG_CAPTURE
+			| TIMER_CC_CTRL_ICEDGE_RISING
+			| TIMER_CC_CTRL_INSEL_PRS
+			| TIMER_CC_CTRL_PRSSEL_PRSCH0);
+	NVIC_SetPriority(TIMER1_IRQn, 3);
+	NVIC_EnableIRQ(TIMER1_IRQn);
+
+	dma_base_set(&dma);
+	dma_enable();
+
+	dma.primary[AS_DMA].dst_end = &USART1->TXDOUBLE;
+	dma.alternate[AS_DMA].dst_end = &USART1->TXDOUBLE;
+	dma_channel_config(AS_DMA, DMA_CH_CTRL_SOURCESEL_USART1
+			| DMA_CH_CTRL_SIGSEL_USART1TXBL);
+	//dma_channel_priority_low(AS_DMA);
+	//dma_channel_alternate_disable(AS_DMA);
+	//dma_channel_mask_disable(AS_DMA);
+
+	dma_flag_error_enable();
+	dma_flag_done_enable(AS_DMA);
+	NVIC_SetPriority(DMA_IRQn, 0);
+	NVIC_EnableIRQ(DMA_IRQn);
+
+	/*
+	 * use location 5:           J4
+	 * US1_CLK -> PC3      GND-| 1  2 |-3.3v
+	 * US1_CS  -> PC0      PA1-| 3  4 |-PA2
+	 * US1_RX  -> PC2      PC0-| 5  6 |-PC1
+	 * US1_TX  -> PC1      PC2-| 7  8 |-PC3
+	usart1_pins(..);
+	 */
+	gpio_drive_strength_high(GPIO_PC3);
+	gpio_mode(GPIO_PC3, GPIO_MODE_PUSHPULLDRIVE);
+	gpio_mode(GPIO_PC0, GPIO_MODE_PUSHPULLDRIVE);
+	gpio_mode(GPIO_PC1, GPIO_MODE_PUSHPULLDRIVE);
+	usart1_pins(USART_ROUTE_LOCATION_LOC5
+			| USART_ROUTE_CLKPEN
+			| USART_ROUTE_CSPEN
+			| USART_ROUTE_TXPEN);
+	usart1_config(USART_CTRL_MSBF | USART_CTRL_SYNC);
+	/* bitrate = peripheral / (2 * (1 + usart_clkdiv / 256))
+	 * 2 * (1 + usart_clkdiv/256) = peripheral / bitrate
+	 * 1 + usart_clkdiv/256 = peripheral / (2*bitrate)
+	 * usart_clkdiv/256 = (peripheral / (2*bitrate)) - 1
+	 * usart_clkdiv = 256 * ((peripheral / (2*bitrate)) - 1)
+	 * usart_clkdiv = 256 * ((24MHz / 2*48kHz*2*16) - 1) = 1744
+	 */
+	usart1_clock_div(1744);
+	usart1_frame_16bit();
+	usart1_master_enable();
+
+	pwm_init();
+	pwm_set();
+	pwm_on();
+
+	/* not needed when usbas_buf is in .bss
+	for (unsigned int i = 0; i < ARRAY_SIZE(usbas_buf); i++)
+		usbas_buf[i].samples = 0;
+	*/
 
 	gpio_clear(LED_GREEN);
 	usb_init();
