@@ -30,9 +30,11 @@
 #include "lib/dma.c"
 #include "lib/prs.c"
 
-#define LEUART_DEBUG
+//#define LEUART_DEBUG
+#define ACM_DEBUG
 #ifdef NDEBUG
 #undef LEUART_DEBUG
+#undef ACM_DEBUG
 #define debug(...)
 #else
 #define debug(...) printf(__VA_ARGS__)
@@ -50,7 +52,7 @@
 #define USB_FIFO_TX0SIZE 128
 #define USB_FIFO_TX1SIZE 64
 #define USB_FIFO_TX2SIZE 64
-#define USB_FIFO_TX3SIZE 0
+#define USB_FIFO_TX3SIZE 128
 
 #define AC_INTERFACE 0
 #define AC_ENDPOINT 2
@@ -64,6 +66,15 @@
 #define DFU_INTERFACE 2
 
 #define LEUART_DMA 1
+
+#ifdef ACM_DEBUG
+#define CDC_INTERFACE 3
+#define CDC_ENDPOINT 4 /* only used in descriptor */
+#define CDC_PACKETSIZE 64
+#define ACM_INTERFACE 4
+#define ACM_ENDPOINT 3
+#define ACM_PACKETSIZE 64
+#endif
 
 struct usb_packet_setup {
 	union {
@@ -133,8 +144,13 @@ static const __align(4) struct usb_descriptor_device usb_descriptor_device = {
 static const __align(4) struct usb_descriptor_configuration usb_descriptor_configuration1 = {
 	.bLength              = 9,
 	.bDescriptorType      = 0x02, /* Configuration */
+#ifdef ACM_DEBUG
+	.wTotalLength         = 9 + 122 + 18 + 58,
+	.bNumInterfaces       = 2 + 1 + 2,
+#else
 	.wTotalLength         = 9 + 122 + 18,
 	.bNumInterfaces       = 2 + 1,
+#endif
 	.bConfigurationValue  = 1,
 	.iConfiguration       = 0,
 	.bmAttributes         = 0x80,
@@ -283,6 +299,71 @@ static const __align(4) struct usb_descriptor_configuration usb_descriptor_confi
 	/* .wDetachTimeOut         */ USB_WORD(50), /* 50ms */
 	/* .wTransferSize          */ USB_WORD(FLASH_PAGE_SIZE),
 	/* .bcdDFUVersion          */ USB_WORD(0x0101), /* DFU v1.1 */
+#ifdef ACM_DEBUG
+	/* Interface */
+	/* .bLength                */ 9,
+	/* .bDescriptorType        */ 0x04, /* Interface */
+	/* .bInterfaceNumber       */ CDC_INTERFACE,
+	/* .bAlternateSetting      */ 0,
+	/* .bNumEndpoints          */ 1,
+	/* .bInterfaceClass        */ 0x02, /* 0x02 = CDC */
+	/* .bInterfaceSubClass     */ 0x02, /* 0x02 = ACM */
+	/* .bInterfaceProtocol     */ 0x01, /* 0x00 = no protocol required, 0x01 = AT commands V.250 etc */
+	/* .iInterface             */ 0,
+	/* CDC Header */
+	/* .bLength                */ 5,
+	/* .bDescriptorType        */ 0x24, /* CS_INTERFACE */
+	/* .bDescriptorSubtype     */ 0x00, /* Header */
+	/* .bcdCDC                 */ USB_WORD(0x0120),
+	/* CDC Call Management */
+	/* .bLength                */ 5,
+	/* .bDescriptorType        */ 0x24, /* CS_INTERFACE */
+	/* .bDescriptorSubtype     */ 0x01, /* Call Management */
+	/* .bmCapabilities         */ 0x00, /* Does not handle call management */
+	/* .bDataInterface         */ ACM_INTERFACE,
+	/* CDC ACM */
+	/* .bLength                */ 4,
+	/* .bDescriptorType        */ 0x24, /* CS_INTERFACE */
+	/* .bDescriptorSubtype     */ 0x02, /* ACM */
+	/* .bmCapabilities         */ 0x00, /* 0x00 = supports nothing */
+	/* CDC Union */
+	/* .bLength                */ 5,
+	/* .bDescriptorType        */ 0x24, /* CS_INTERFACE */
+	/* .bDescriptorSubtype     */ 0x06, /* Union */
+	/* .bControlInterface      */ CDC_INTERFACE,
+	/* .bSubordinateInterface0 */ ACM_INTERFACE,
+	/* Endpoint */
+	/* .bLength                */ 7,
+	/* .bDescriptorType        */ 0x05, /* Endpoint */
+	/* .bEndpointAddress       */ 0x80 | CDC_ENDPOINT, /* in */
+	/* .bmAttributes           */ 0x03, /* interrupt */
+	/* .wMaxPacketSize         */ USB_WORD(CDC_PACKETSIZE),
+	/* .bInterval              */ 255,  /* poll every 255ms */
+	/* Interface */
+	/* .bLength                */ 9,
+	/* .bDescriptorType        */ 0x04, /* Interface */
+	/* .bInterfaceNumber       */ ACM_INTERFACE,
+	/* .bAlternateSetting      */ 0,
+	/* .bNumEndpoints          */ 2,
+	/* .bInterfaceClass        */ 0x0A, /* 0x0A = CDC Data */
+	/* .bInterfaceSubClass     */ 0x00,
+	/* .bInterfaceProtocol     */ 0x00,
+	/* .iInterface             */ 0,
+	/* Endpoint */
+	/* .bLength                */ 7,
+	/* .bDescriptorType        */ 0x05, /* Endpoint */
+	/* .bEndpointAddress       */ 0x80 | ACM_ENDPOINT, /* in */
+	/* .bmAttributes           */ 0x02, /* bulk */
+	/* .wMaxPacketSize         */ USB_WORD(ACM_PACKETSIZE),
+	/* .bInterval              */ 0,    /* unused */
+	/* Endpoint */
+	/* .bLength                */ 7,
+	/* .bDescriptorType        */ 0x05, /* Endpoint */
+	/* .bEndpointAddress       */ ACM_ENDPOINT, /* out */
+	/* .bmAttributes           */ 0x02, /* bulk */
+	/* .wMaxPacketSize         */ USB_WORD(ACM_PACKETSIZE),
+	/* .bInterval              */ 0,    /* unused */
+#endif
 	}
 };
 
@@ -448,12 +529,79 @@ LEUART0_IRQHandler(void)
 }
 #endif
 
+#ifdef ACM_DEBUG
+static __uninitialized union {
+	uint32_t word[ACM_PACKETSIZE/sizeof(uint32_t)];
+	uint8_t byte[ACM_PACKETSIZE];
+} acm_outbuf;
+
+static struct {
+	volatile uint32_t first;
+	volatile uint32_t last;
+	uint8_t buf[1024];
+} acm_inbuf;
+
+static volatile bool acm_idle;
+
+static void
+acm_shipit(void)
+{
+	uint32_t first = acm_inbuf.first;
+	uint32_t last = acm_inbuf.last;
+	uint32_t end;
+
+	if (first == last) {
+		acm_inbuf.first = acm_inbuf.last = 0;
+		acm_idle = true;
+		return;
+	}
+
+	end = first + ACM_PACKETSIZE;
+	if (last > first && end > last) {
+		end = last;
+		if (last & 3) {
+			last = (last & ~3) + 4;
+			last %= ARRAY_SIZE(acm_inbuf.buf);
+		}
+		acm_inbuf.first = acm_inbuf.last = last;
+	} else if (end >= ARRAY_SIZE(acm_inbuf.buf)) {
+		end = ARRAY_SIZE(acm_inbuf.buf);
+		acm_inbuf.first = 0;
+	} else
+		acm_inbuf.first = end;
+
+	usb_ep_in_dma_address_set(ACM_ENDPOINT, &acm_inbuf.buf[first]);
+	usb_ep_in_transfer_size(ACM_ENDPOINT, 1, end - first);
+	usb_ep_in_enable(ACM_ENDPOINT);
+
+	acm_idle = false;
+}
+
+static void
+acm_write(const uint8_t *ptr, size_t len)
+{
+	uint32_t last = acm_inbuf.last;
+
+	for (; len > 0; len--) {
+		acm_inbuf.buf[last++] = *ptr++;
+		last %= ARRAY_SIZE(acm_inbuf.buf);
+	}
+	acm_inbuf.last = last;
+
+	if (acm_idle)
+		acm_shipit();
+}
+#endif
+
 #ifndef NDEBUG
 ssize_t
 _write(int fd, const uint8_t *ptr, size_t len)
 {
 #ifdef LEUART_DEBUG
 	leuart0_write(ptr, len);
+#endif
+#ifdef ACM_DEBUG
+	acm_write(ptr, len);
 #endif
 	return len;
 }
@@ -747,6 +895,14 @@ usb_handle_get_status_endpoint(const struct usb_packet_setup *p, const void **da
 		return 2;
 	}
 
+#ifdef ACM_DEBUG
+	if (p->wIndex == ACM_ENDPOINT) {
+		usb_inbuf.u16[0] = 0;
+		*data = &usb_inbuf;
+		return 2;
+	}
+#endif
+
 	return -1;
 }
 
@@ -843,6 +999,25 @@ usb_handle_set_configuration(const struct usb_packet_setup *p, const void **data
 		/* configure audio control interrupt endpoint */
 		usb_ep_in_config_interrupt(AC_ENDPOINT, AC_PACKETSIZE);
 		usb_ep_flag_in_enable(AC_ENDPOINT);
+#ifdef ACM_DEBUG
+		/* configure CDC endpoint */
+		/* the chip doesn't support ep 4, but we never
+		 * use the  cdc interrupt anyway
+		usb_ep_in_config_interrupt(CDC_ENDPOINT, CDC_PACKETSIZE);
+		usb_ep_flag_in_enable(CDC_ENDPOINT);
+		*/
+
+		/* configure ACM endpoints */
+		usb_ep_in_config_bulk(ACM_ENDPOINT, ACM_PACKETSIZE);
+
+		usb_ep_out_dma_address_set(ACM_ENDPOINT, &acm_outbuf);
+		usb_ep_out_transfer_size(ACM_ENDPOINT, 1, ACM_PACKETSIZE);
+		usb_ep_out_config_bulk_enabled(ACM_ENDPOINT, ACM_PACKETSIZE);
+
+		usb_ep_flag_inout_enable(ACM_ENDPOINT);
+
+		acm_idle = true;
+#endif
 		return 0;
 	}
 
@@ -900,6 +1075,13 @@ usb_handle_set_interface(const struct usb_packet_setup *p, const void **data)
 		}
 	}
 
+#ifdef ACM_DEBUG
+	if (p->wIndex == CDC_INTERFACE && p->wValue == 0)
+		return 0;
+	if (p->wIndex == ACM_INTERFACE && p->wValue == 0)
+		return 0;
+#endif
+
 	return -1;
 }
 
@@ -910,6 +1092,12 @@ usb_handle_clear_feature_endpoint(const struct usb_packet_setup *p, const void *
 
 	if (p->wIndex == AS_ENDPOINT)
 		return 0;
+#ifdef ACM_DEBUG
+	if (p->wIndex == CDC_ENDPOINT)
+		return 0;
+	if (p->wIndex == ACM_ENDPOINT)
+		return 0;
+#endif
 
 	return -1;
 }
@@ -1051,6 +1239,52 @@ usb_handle_dfu_detach(const struct usb_packet_setup *p, const void **data)
 	return 0;
 }
 
+#ifdef ACM_DEBUG
+static int
+usb_handle_set_control_line_state(const struct usb_packet_setup *p, const void **data)
+{
+	debug("SET_CONTROL_LINE_STATE: wIndex = %hu wValue = 0x%04hx\r\n",
+			p->wIndex, p->wValue);
+
+	if (p->wIndex == CDC_INTERFACE) {
+		debug("  RTS %u DTR %u\r\n", !!(p->wValue & 0x2), !!(p->wValue & 0x1));
+		return 0;
+	}
+
+	return -1;
+}
+
+static int
+usb_handle_set_line_coding(const struct usb_packet_setup *p, const void **data)
+{
+	debug("SET_LINE_CODING: wIndex = %hu wValue = 0x%04hx\r\n",
+			p->wIndex, p->wValue);
+
+	if (p->wIndex == CDC_INTERFACE) {
+		const struct {
+			uint32_t dwDTERate;
+			uint8_t bCharFormat;
+			uint8_t bParityType;
+			uint8_t bDataBits;
+		} *lc = *data;
+
+		debug("SET_LINE_CODING: {\r\n"
+		      "  dwDTERate   = %lu\r\n"
+		      "  bCharFormat = 0x%02x\r\n"
+		      "  bParityType = 0x%02x\r\n"
+		      "  bDataBits   = 0x%02x\r\n"
+		      "}\r\n",
+				lc->dwDTERate,
+				lc->bCharFormat,
+				lc->bParityType,
+				lc->bDataBits);
+		return 0;
+	}
+
+	return -1;
+}
+#endif
+
 struct usb_setup_handler {
 	uint16_t req;
 	int16_t len;
@@ -1074,6 +1308,10 @@ static const struct usb_setup_handler usb_setup_handlers[] = {
 	{ .req = 0x84a1, .len = -1, .fn = usb_handle_get_res },
 	{ .req = 0xffa1, .len = -1, .fn = usb_handle_get_stat },
 	{ .req = 0x0021, .len =  0, .fn = usb_handle_dfu_detach },
+#ifdef ACM_DEBUG
+	{ .req = 0x2221, .len =  0, .fn = usb_handle_set_control_line_state },
+	{ .req = 0x2021, .len =  7, .fn = usb_handle_set_line_coding },
+#endif
 };
 
 static int
@@ -1277,6 +1515,96 @@ usb_handle_audio_control_in(void)
 	debug("AC IN\r\n");
 }
 
+#ifdef ACM_DEBUG
+static void
+usb_handle_acm_in(void)
+{
+	uint32_t flags = usb_ep_in_flags(ACM_ENDPOINT);
+
+	usb_ep_in_flags_clear(ACM_ENDPOINT, flags);
+
+	if (usb_ep_in_flag_timeout(flags)) {
+		debug("timeout!!\r\n");
+		usb_ep_in_enable(ACM_ENDPOINT);
+	}
+	if (usb_ep_in_flag_complete(flags))
+		acm_shipit();
+}
+
+static void
+usb_handle_acm_out(void)
+{
+	uint32_t flags = usb_ep_out_flags(ACM_ENDPOINT);
+	uint32_t bytes;
+	static bool twog;
+
+	usb_ep_out_flags_clear(ACM_ENDPOINT, flags);
+
+	if (!usb_ep_out_flag_complete(flags))
+		return;
+
+	bytes = ACM_PACKETSIZE - usb_ep_out_bytes_left(ACM_ENDPOINT);
+	debug("ACM: received %lu bytes\r\n", bytes);
+
+	//acm_write(acm_outbuf.byte, bytes);
+
+	for (uint32_t i = 0; i < bytes; i++) {
+		switch (acm_outbuf.byte[i]) {
+		case 'p':
+			debug("first %lu last %lu idle %u\r\n",
+					acm_inbuf.first,
+					acm_inbuf.last,
+					acm_idle);
+			break;
+		case 's':
+			twog = false;
+			debug("mute %hu volume %hd\r\n",
+					usbac_mute, usbac_volume);
+			break;
+		case 'm':
+			usbac_mute_set(!usbac_mute);
+			usbac_notify_host();
+			break;
+		case 'u':
+			if (usbac_volume < USBAC_MAX) {
+				usbac_volume_set(usbac_volume + USBAC_RES);
+				usbac_notify_host();
+			}
+			break;
+		case 'd':
+			if (usbac_volume > USBAC_MIN) {
+				usbac_volume_set(usbac_volume - USBAC_RES);
+				usbac_notify_host();
+			}
+			break;
+		case 'g':
+			if (!twog) {
+				twog = true;
+				continue;
+			}
+			if (timer1_flag_cc_enabled(0)) {
+				timer1_flag_cc_disable(0);
+			} else {
+				timer1_flag_cc_enable(0);
+			}
+			break;
+		case 'c':
+			debug("ep1in:    0x%08lx\r\n", USB->DIEP[0].CTL);
+			debug("ep1in:    0x%08lx\r\n", USB->DIEP[0].INT);
+			debug("ep1out:   0x%08lx\r\n", USB->DOEP[0].CTL);
+			debug("ep1out:   0x%08lx\r\n", USB->DOEP[0].INT);
+			debug("daintmsk: 0x%08lx\r\n", USB->DAINTMSK);
+			break;
+		}
+		twog = false;
+	}
+
+	usb_ep_out_dma_address_set(ACM_ENDPOINT, &acm_outbuf);
+	usb_ep_out_transfer_size(ACM_ENDPOINT, 1, ACM_PACKETSIZE);
+	usb_ep_out_enable(ACM_ENDPOINT);
+}
+#endif
+
 static void
 usb_handle_endpoints(void)
 {
@@ -1290,6 +1618,12 @@ usb_handle_endpoints(void)
 		usb_handle_audio_streaming_out();
 	if (usb_ep_flag_in(AC_ENDPOINT, flags))
 		usb_handle_audio_control_in();
+#ifdef ACM_DEBUG
+	if (usb_ep_flag_in(ACM_ENDPOINT, flags))
+		usb_handle_acm_in();
+	if (usb_ep_flag_out(ACM_ENDPOINT, flags))
+		usb_handle_acm_out();
+#endif
 }
 
 void
