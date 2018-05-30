@@ -91,6 +91,11 @@ SECTIONS
   . = ALIGN(4);
   __etext = .;
 
+  .dma (NOLOAD):
+  {
+    *(.dma)
+  } > RAM
+
   .data : AT (__etext)
   {
     __data_start__ = .;
