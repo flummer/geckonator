@@ -63,6 +63,8 @@
 
 #define DFU_INTERFACE 2
 
+#define LEUART_DMA 1
+
 struct usb_packet_setup {
 	union {
 		struct {
@@ -415,8 +417,34 @@ LEUART0_IRQHandler(void)
 		return;
 	}
 
+#ifdef LEUART_DMA
+	if (dma_channel_enabled(LEUART_DMA))
+		return;
+
+	if (last < first) {
+		leuart0_output.first = 0;
+		last = ARRAY_SIZE(leuart0_output.buf);
+	} else
+		leuart0_output.first = last;
+
+	dma_channel_alternate_disable(LEUART_DMA);
+	dma.primary[LEUART_DMA].src_end = &leuart0_output.buf[last-1];
+	dma.primary[LEUART_DMA].control =
+		  (3 << 30)  /* dst_inc, no increment */
+		| (0 << 28)  /* dst_size, 1 byte */
+		| (0 << 26)  /* src_inc, 1 byte */
+		| (0 << 24)  /* src_size, 1 byte */
+		| (0 << 21)  /* dst_prot_ctrl, non-privileged */
+		| (0 << 18)  /* src_prot_ctrl, non-privileged */
+		| (0 << 14)  /* R_power, arbitrate everytime */
+		| (((last - first) - 1) << 4) /* n_minus_1 */
+		| (0 <<  3)  /* next_useburst, for scatter-gather */
+		| (1 <<  0); /* cycle_ctrl, basic */
+	dma_channel_enable(LEUART_DMA);
+#else
 	leuart0_txdata(leuart0_output.buf[first++]);
 	leuart0_output.first = first % ARRAY_SIZE(leuart0_output.buf);
+#endif
 }
 #endif
 
@@ -1588,6 +1616,11 @@ main(void)
 	//dma_channel_priority_low(AS_DMA);
 	//dma_channel_alternate_disable(AS_DMA);
 	//dma_channel_mask_disable(AS_DMA);
+#ifdef LEUART_DMA
+	dma.primary[LEUART_DMA].dst_end = &LEUART0->TXDATA;
+	dma_channel_config(LEUART_DMA, DMA_CH_CTRL_SOURCESEL_LEUART0
+			| DMA_CH_CTRL_SIGSEL_LEUART0TXBL);
+#endif
 
 	dma_flag_error_enable();
 	dma_flag_done_enable(AS_DMA);
