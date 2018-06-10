@@ -47,6 +47,8 @@
 #define USB_FIFO_TX2SIZE 0
 #define USB_FIFO_TX3SIZE 0
 
+#define DFU_INTERFACE 0
+
 struct usb_packet_setup {
 	union {
 		struct {
@@ -115,13 +117,30 @@ static const __align(4) struct usb_descriptor_device usb_descriptor_device = {
 static const __align(4) struct usb_descriptor_configuration usb_descriptor_configuration1 = {
 	.bLength              = 9,
 	.bDescriptorType      = 0x02, /* Configuration */
-	.wTotalLength         = 9,
-	.bNumInterfaces       = 0,
+	.wTotalLength         = 9 + 18,
+	.bNumInterfaces       = 1,
 	.bConfigurationValue  = 1,
 	.iConfiguration       = 0,
 	.bmAttributes         = 0x80,
 	.bMaxPower            = 250,
 	.rest = {
+	/* Interface */
+	/* .bLength                */ 9,
+	/* .bDescriptorType        */ 0x04, /* Interface */
+	/* .bInterfaceNumber       */ DFU_INTERFACE,
+	/* .bAlternateSetting      */ 0,
+	/* .bNumEndpoints          */ 0,
+	/* .bInterfaceClass        */ 0xfe, /* 0xfe = Application Specific */
+	/* .bInterfaceSubClass     */ 0x01, /* 0x01 = Device Firmware Upgrade */
+	/* .bInterfaceProtocol     */ 0x01, /* 0x01 = Runtime Protocol */
+	/* .iInterface             */ 4,
+	/* DFU Interface */
+	/* .bLength                */ 9,
+	/* .bDescriptorType        */ 0x21, /* DFU Interface */
+	/* .bmAttributes           */ 0x08, /* will detach usb on DFU_DETACH */
+	/* .wDetachTimeOut         */ USB_WORD(50), /* 50ms */
+	/* .wTransferSize          */ USB_WORD(FLASH_PAGE_SIZE),
+	/* .bcdDFUVersion          */ USB_WORD(0x0101), /* DFU v1.1 */
 	}
 };
 
@@ -163,11 +182,20 @@ static const __align(4) struct usb_descriptor_string usb_descriptor_serial = {
 	},
 };
 
+static const __align(4) struct usb_descriptor_string usb_descriptor_dfu = {
+	.bLength         = 20,
+	.bDescriptorType = 0x03, /* String */
+	.wCodepoint = {
+		'G','e','c','k','o','B','o','o','t',
+	},
+};
+
 static const struct usb_descriptor_string *const usb_descriptor_string[] = {
 	&usb_descriptor_string0,
 	&usb_descriptor_vendor,
 	&usb_descriptor_product,
 	&usb_descriptor_serial,
+	&usb_descriptor_dfu,
 };
 
 static struct {
@@ -458,6 +486,21 @@ usb_handle_clear_feature_endpoint(const struct usb_packet_setup *p, const void *
 	return -1;
 }
 
+static bool dfu_reset;
+
+static int
+usb_handle_dfu_detach(const struct usb_packet_setup *p, const void **data)
+{
+	debug("DFU_DETACH: wValue = %hu, wIndex = %hu\r\n",
+			p->wValue, p->wIndex);
+
+	if (p->wIndex != DFU_INTERFACE)
+		return -1;
+
+	dfu_reset = true;
+	return 0;
+}
+
 struct usb_setup_handler {
 	uint16_t req;
 	int16_t len;
@@ -472,6 +515,7 @@ static const struct usb_setup_handler usb_setup_handlers[] = {
 	{ .req = 0x0900, .len =  0, .fn = usb_handle_set_configuration },
 	{ .req = 0x0b01, .len =  0, .fn = usb_handle_set_interface },
 	{ .req = 0x0102, .len =  0, .fn = usb_handle_clear_feature_endpoint },
+	{ .req = 0x0021, .len =  0, .fn = usb_handle_dfu_detach },
 };
 
 static int
@@ -570,8 +614,16 @@ usb_handle_ep0(void)
 	}
 
 	bytes = usb_state.bytes;
-	if (bytes == 0)
+	if (bytes == 0) {
+		if (dfu_reset) {
+			if (usb_ep0in_flag_complete(iflags)) {
+				NVIC_SystemReset();
+				__builtin_unreachable();
+			} else
+				dfu_reset = false;
+		}
 		return;
+	}
 
 	if (usb_ep0in_flag_complete(iflags)) {
 		/* data IN */
