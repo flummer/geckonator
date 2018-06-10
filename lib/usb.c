@@ -37,10 +37,6 @@ usb_vreg_flag_high_set(void)             { USB->IFS = USB_IFS_VREGOSL; }
 /* USB_IFC */
 static inline void
 usb_vreg_flags_clear(uint32_t v)         { USB->IFC = v; }
-static inline void
-usb_vreg_flag_low_clear(void)            { USB->IFC = USB_IFC_VREGOSL; }
-static inline void
-usb_vreg_flag_high_clear(void)           { USB->IFC = USB_IFC_VREGOSL; }
 
 /* USB_IEN */
 static inline void
@@ -137,24 +133,14 @@ usb_flags_clear(uint32_t v)
 }
 static inline uint32_t
 usb_flag_wakeup(uint32_t v)              { return v & USB_GINTSTS_WKUPINT; }
-static inline void
-usb_flag_wakeup_clear(void)              { USB->GINTSTS = USB_GINTSTS_WKUPINT; }
 static inline uint32_t
 usb_flag_reset_detected(uint32_t v)      { return v & USB_GINTSTS_RESETDET; }
-static inline void
-usb_flag_reset_detected_clear(void)      { USB->GINTSTS = USB_GINTSTS_RESETDET; }
 static inline uint32_t
 usb_flag_fetch_suspended(uint32_t v)     { return v & USB_GINTSTS_FETSUSP; }
-static inline void
-usb_flag_fetch_suspended_clear(void)     { USB->GINTSTS = USB_GINTSTS_FETSUSP; }
 static inline uint32_t
 usb_flag_per_incomplete(uint32_t v)      { return v & USB_GINTSTS_INCOMPLP; }
-static inline void
-usb_flag_per_incomplete_clear(void)      { USB->GINTSTS = USB_GINTSTS_INCOMPLP; }
 static inline uint32_t
 usb_flag_iso_incomplete(uint32_t v)      { return v & USB_GINTSTS_INCOMPISOIN; }
-static inline void
-usb_flag_iso_incomplete_clear(void)      { USB->GINTSTS = USB_GINTSTS_INCOMPISOIN; }
 static inline uint32_t
 usb_flag_ep_out(uint32_t v)              { return v & USB_GINTSTS_OEPINT; }
 static inline uint32_t
@@ -163,28 +149,16 @@ static inline uint32_t
 usb_flag_ep(uint32_t v)                  { return v & (USB_GINTSTS_OEPINT | USB_GINTSTS_IEPINT); }
 static inline uint32_t
 usb_flag_iso_dropped(uint32_t v)         { return v & USB_GINTSTS_ISOOUTDROP; }
-static inline void
-usb_flag_iso_dropped_clear(void)         { USB->GINTSTS = USB_GINTSTS_ISOOUTDROP; }
 static inline uint32_t
 usb_flag_enumdone(uint32_t v)            { return v & USB_GINTSTS_ENUMDONE; }
-static inline void
-usb_flag_enumdone_clear(void)            { USB->GINTSTS = USB_GINTSTS_ENUMDONE; }
 static inline uint32_t
 usb_flag_reset(uint32_t v)               { return v & USB_GINTSTS_USBRST; }
-static inline void
-usb_flag_reset_clear(void)               { USB->GINTSTS = USB_GINTSTS_USBRST; }
 static inline uint32_t
 usb_flag_suspend_usb(uint32_t v)         { return v & USB_GINTSTS_USBSUSP; }
-static inline void
-usb_flag_suspend_usb_clear(void)         { USB->GINTSTS = USB_GINTSTS_USBSUSP; }
 static inline uint32_t
 usb_flag_suspend_early(uint32_t v)       { return v & USB_GINTSTS_ERLYSUSP; }
-static inline void
-usb_flag_suspend_early_clear(void)       { USB->GINTSTS = USB_GINTSTS_ERLYSUSP; }
 static inline uint32_t
 usb_flag_suspend(uint32_t v)             { return v & (USB_GINTSTS_USBSUSP | USB_GINTSTS_ERLYSUSP); }
-static inline void
-usb_flag_suspend_clear(void)             { USB->GINTSTS = (USB_GINTSTS_USBSUSP | USB_GINTSTS_ERLYSUSP); }
 static inline uint32_t
 usb_flag_nak_out_effective(uint32_t v)   { return v & USB_GINTSTS_GOUTNAKEFF; }
 static inline uint32_t
@@ -193,8 +167,6 @@ static inline uint32_t
 usb_flag_rxdata(uint32_t v)              { return v & USB_GINTSTS_RXFLVL; }
 static inline uint32_t
 usb_flag_sof(uint32_t v)                 { return v & USB_GINTSTS_SOF; }
-static inline void
-usb_flag_sof_clear(void)                 { USB->GINTSTS = USB_GINTSTS_SOF; }
 
 /* USB_GINTMSK */
 static inline void
@@ -507,40 +479,22 @@ usb_ep0out_flags_clear(uint32_t v)
 }
 static inline uint32_t
 usb_ep0out_flag_nak(uint32_t v)          { return v & USB_DOEP0INT_NAKINTRPT; }
-static inline void
-usb_ep0out_flag_nak_clear(void)          { USB->DOEP0INT = USB_DOEP0INT_NAKINTRPT; }
 static inline uint32_t
 usb_ep0out_flag_babble(uint32_t v)       { return v & USB_DOEP0INT_BBLEERR; }
-static inline void
-usb_ep0out_flag_babble_clear(void)       { USB->DOEP0INT = USB_DOEP0INT_BBLEERR; }
 static inline uint32_t
 usb_ep0out_flag_packet_drop(uint32_t v)  { return v & USB_DOEP0INT_PKTDRPSTS; }
-static inline void
-usb_ep0out_flag_packet_drop_clear(void)  { USB->DOEP0INT = USB_DOEP0INT_PKTDRPSTS; }
 static inline uint32_t
 usb_ep0out_flag_setup_b2b(uint32_t v)    { return v & USB_DOEP0INT_BACK2BACKSETUP; }
-static inline void
-usb_ep0out_flag_setup_b2b_clear(void)    { USB->DOEP0INT = USB_DOEP0INT_BACK2BACKSETUP; }
 static inline uint32_t
 usb_ep0out_flag_out_disabled(uint32_t v) { return v & USB_DOEP0INT_OUTTKNEPDIS; }
-static inline void
-usb_ep0out_flag_out_disabled_clear(void) { USB->DOEP0INT = USB_DOEP0INT_OUTTKNEPDIS; }
 static inline uint32_t
 usb_ep0out_flag_setup(uint32_t v)        { return v & USB_DOEP0INT_SETUP; }
-static inline void
-usb_ep0out_flag_setup_clear(void)        { USB->DOEP0INT = USB_DOEP0INT_SETUP; }
 static inline uint32_t
 usb_ep0out_flag_ahb_error(uint32_t v)    { return v & USB_DOEP0INT_AHBERR; }
-static inline void
-usb_ep0out_flag_ahb_error_clear(void)    { USB->DOEP0INT = USB_DOEP0INT_AHBERR; }
 static inline uint32_t
 usb_ep0out_flag_disabled(uint32_t v)     { return v & USB_DOEP0INT_EPDISBLD; }
-static inline void
-usb_ep0out_flag_disabled_clear(void)     { USB->DOEP0INT = USB_DOEP0INT_EPDISBLD; }
 static inline uint32_t
 usb_ep0out_flag_complete(uint32_t v)     { return v & USB_DOEP0INT_XFERCOMPL; }
-static inline void
-usb_ep0out_flag_complete_clear(void)     { USB->DOEP0INT = USB_DOEP0INT_XFERCOMPL; }
 
 /* USB_DOEP0TSIZ */
 static inline void
@@ -618,40 +572,22 @@ usb_ep_out_flags_clear(unsigned int i, uint32_t v)
 }
 static inline uint32_t
 usb_ep_out_flag_nak(uint32_t v)                    { return v & USB_DOEP_INT_NAKINTRPT; }
-static inline void
-usb_ep_out_flag_nak_clear(unsigned int i)          { USB->DOEP[i-1].INT = USB_DOEP_INT_NAKINTRPT; }
 static inline uint32_t
 usb_ep_out_flag_babble(uint32_t v)                 { return v & USB_DOEP_INT_BBLEERR; }
-static inline void
-usb_ep_out_flag_babble_clear(unsigned int i)       { USB->DOEP[i-1].INT = USB_DOEP_INT_BBLEERR; }
 static inline uint32_t
 usb_ep_out_flag_packet_drop(uint32_t v)            { return v & USB_DOEP_INT_PKTDRPSTS; }
-static inline void
-usb_ep_out_flag_packet_drop_clear(unsigned int i)  { USB->DOEP[i-1].INT = USB_DOEP_INT_PKTDRPSTS; }
 static inline uint32_t
 usb_ep_out_flag_setup_b2b(uint32_t v)              { return v & USB_DOEP_INT_BACK2BACKSETUP; }
-static inline void
-usb_ep_out_flag_setup_b2b_clear(unsigned int i)    { USB->DOEP[i-1].INT = USB_DOEP_INT_BACK2BACKSETUP; }
 static inline uint32_t
 usb_ep_out_flag_out_disabled(uint32_t v)           { return v & USB_DOEP_INT_OUTTKNEPDIS; }
-static inline void
-usb_ep_out_flag_out_disabled_clear(unsigned int i) { USB->DOEP[i-1].INT = USB_DOEP_INT_OUTTKNEPDIS; }
 static inline uint32_t
 usb_ep_out_flag_setup(uint32_t v)                  { return v & USB_DOEP_INT_SETUP; }
-static inline void
-usb_ep_out_flag_setup_clear(unsigned int i)        { USB->DOEP[i-1].INT = USB_DOEP_INT_SETUP; }
 static inline uint32_t
 usb_ep_out_flag_ahb_error(uint32_t v)              { return v & USB_DOEP_INT_AHBERR; }
-static inline void
-usb_ep_out_flag_ahb_error_clear(unsigned int i)    { USB->DOEP[i-1].INT = USB_DOEP_INT_AHBERR; }
 static inline uint32_t
 usb_ep_out_flag_disabled(uint32_t v)               { return v & USB_DOEP_INT_EPDISBLD; }
-static inline void
-usb_ep_out_flag_disabled_clear(unsigned int i)     { USB->DOEP[i-1].INT = USB_DOEP_INT_EPDISBLD; }
 static inline uint32_t
 usb_ep_out_flag_complete(uint32_t v)               { return v & USB_DOEP_INT_XFERCOMPL; }
-static inline void
-usb_ep_out_flag_complete_clear(unsigned int i)     { USB->DOEP[i-1].INT = USB_DOEP_INT_XFERCOMPL; }
 
 /* USB_DOEPx_TSIZ */
 static inline void
