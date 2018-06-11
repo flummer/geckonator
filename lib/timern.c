@@ -12,17 +12,32 @@ timern_(start, void)                     { TIMERn->CMD = TIMER_CMD_START; }
 static inline uint32_t
 timern_(status, void)                    { return TIMERn->STATUS; }
 static inline uint32_t
+timern_(cc_polarity, unsigned int i)
+{
+	return TIMERn->STATUS & (TIMER_STATUS_CCPOL0 << i);
+}
+static inline uint32_t
 timern_(cc2_polarity, void)              { return TIMERn->STATUS & TIMER_STATUS_CCPOL2; }
 static inline uint32_t
 timern_(cc1_polarity, void)              { return TIMERn->STATUS & TIMER_STATUS_CCPOL1; }
 static inline uint32_t
 timern_(cc0_polarity, void)              { return TIMERn->STATUS & TIMER_STATUS_CCPOL0; }
 static inline uint32_t
+timern_(cc_capture_valid, unsigned int i)
+{
+	return TIMERn->STATUS & (TIMER_STATUS_ICV0 << i);
+}
+static inline uint32_t
 timern_(cc2_capture_valid, void)         { return TIMERn->STATUS & TIMER_STATUS_ICV2; }
 static inline uint32_t
 timern_(cc1_capture_valid, void)         { return TIMERn->STATUS & TIMER_STATUS_ICV1; }
 static inline uint32_t
 timern_(cc0_capture_valid, void)         { return TIMERn->STATUS & TIMER_STATUS_ICV0; }
+static inline uint32_t
+timern_(cc_buffer_valid, unsigned int i)
+{
+	return TIMERn->STATUS & (TIMER_STATUS_CCVBV0 << i);
+}
 static inline uint32_t
 timern_(cc2_buffer_valid, void)          { return TIMERn->STATUS & TIMER_STATUS_CCVBV2; }
 static inline uint32_t
@@ -37,6 +52,21 @@ static inline uint32_t
 timern_(running, void)                   { return TIMERn->STATUS & TIMER_STATUS_RUNNING; }
 
 /* TIMERn_IEN */
+static inline uint32_t
+timern_(flag_cc_overflow_enabled, unsigned int i)
+{
+	return TIMERn->IEN & (TIMER_IEN_ICBOF0 << i);
+}
+static inline void
+timern_(flag_cc_overflow_disable, unsigned int i)
+{
+	TIMERn->IEN &= ~(TIMER_IEN_ICBOF0 << i);
+}
+static inline void
+timern_(flag_cc_overflow_enable, unsigned int i)
+{
+	TIMERn->IEN |= TIMER_IEN_ICBOF0 << i;
+}
 static inline void
 timern_(flag_cc2_overflow_disable, void) { TIMERn->IEN &= ~TIMER_IEN_ICBOF2; }
 static inline void
@@ -49,6 +79,21 @@ static inline void
 timern_(flag_cc0_overflow_disable, void) { TIMERn->IEN &= ~TIMER_IEN_ICBOF0; }
 static inline void
 timern_(flag_cc0_overflow_enable, void)  { TIMERn->IEN |= TIMER_IEN_ICBOF0; }
+static inline uint32_t
+timern_(flag_cc_enabled, unsigned int i)
+{
+	return TIMERn->IEN & (TIMER_IEN_CC0 << i);
+}
+static inline void
+timern_(flag_cc_disable, unsigned int i)
+{
+	TIMERn->IEN &= ~(TIMER_IEN_CC0 << i);
+}
+static inline void
+timern_(flag_cc_enable, unsigned int i)
+{
+	TIMERn->IEN |= TIMER_IEN_CC0 << i;
+}
 static inline void
 timern_(flag_cc2_disable, void)          { TIMERn->IEN &= ~TIMER_IEN_CC2; }
 static inline void
@@ -74,11 +119,21 @@ timern_(flag_overflow_enable, void)      { TIMERn->IEN |= TIMER_IEN_OF; }
 static inline uint32_t
 timern_(flags, void)                     { return TIMERn->IF; }
 static inline uint32_t
+timern_(flag_cc_overflow, unsigned int i, uint32_t v)
+{
+	return v & (TIMER_IF_ICBOF0 << i);
+}
+static inline uint32_t
 timern_(flag_cc2_overflow, uint32_t v)   { return v & TIMER_IF_ICBOF2; }
 static inline uint32_t
 timern_(flag_cc1_overflow, uint32_t v)   { return v & TIMER_IF_ICBOF1; }
 static inline uint32_t
 timern_(flag_cc0_overflow, uint32_t v)   { return v & TIMER_IF_ICBOF0; }
+static inline uint32_t
+timern_(flag_cc, unsigned int i, uint32_t v)
+{
+	return v & (TIMER_IF_CC0 << i);
+}
 static inline uint32_t
 timern_(flag_cc2, uint32_t v)            { return v & TIMER_IF_CC2; }
 static inline uint32_t
@@ -94,11 +149,21 @@ timern_(flag_overflow, uint32_t v)       { return v & TIMER_IF_OF; }
 static inline void
 timern_(flags_set, uint32_t v)           { TIMERn->IFS = v; }
 static inline void
+timern_(flag_cc_overflow_set, unsigned int i)
+{
+	TIMERn->IFS = TIMER_IFS_ICBOF0 << i;
+}
+static inline void
 timern_(flag_cc2_overflow_set, void)     { TIMERn->IFS = TIMER_IFS_ICBOF2; }
 static inline void
 timern_(flag_cc1_overflow_set, void)     { TIMERn->IFS = TIMER_IFS_ICBOF1; }
 static inline void
 timern_(flag_cc0_overflow_set, void)     { TIMERn->IFS = TIMER_IFS_ICBOF0; }
+static inline void
+timern_(flag_cc_set, unsigned int i)
+{
+	TIMERn->IFS = TIMER_IFS_CC0 << i;
+}
 static inline void
 timern_(flag_cc2_set, void)              { TIMERn->IFS = TIMER_IFS_CC2; }
 static inline void
@@ -114,11 +179,21 @@ timern_(flag_overflow_set, void)         { TIMERn->IFS = TIMER_IFS_OF; }
 static inline void
 timern_(flags_clear, uint32_t v)         { TIMERn->IFC = v; }
 static inline void
+timern_(flag_cc_overflow_clear, unsigned int i)
+{
+	TIMERn->IFC = TIMER_IFC_ICBOF0 << i;
+}
+static inline void
 timern_(flag_cc2_overflow_clear, void)   { TIMERn->IFC = TIMER_IFC_ICBOF2; }
 static inline void
 timern_(flag_cc1_overflow_clear, void)   { TIMERn->IFC = TIMER_IFC_ICBOF1; }
 static inline void
 timern_(flag_cc0_overflow_clear, void)   { TIMERn->IFC = TIMER_IFC_ICBOF0; }
+static inline void
+timern_(flag_cc_clear, unsigned int i)
+{
+	TIMERn->IFC = TIMER_IFC_CC0 << i;
+}
 static inline void
 timern_(flag_cc2_clear, void)            { TIMERn->IFC = TIMER_IFC_CC2; }
 static inline void
@@ -135,6 +210,8 @@ static inline uint32_t
 timern_(top, void)                        { return TIMERn->TOP; }
 static inline void
 timern_(top_set, uint32_t v)              { TIMERn->TOP = v; }
+static inline void
+timern_(top_max, void)                    { TIMERn->TOP = TIMER_TOP_TOP_DEFAULT; }
 
 /* TIMERn_TOPB */
 static inline uint32_t
@@ -151,6 +228,16 @@ timern_(counter_set, uint32_t v)          { TIMERn->CNT = v; }
 /* TIMERn_ROUTE */
 static inline void
 timern_(pins, uint32_t v)                 { TIMERn->ROUTE = v; }
+static inline void
+timern_(pin_cc_disable, unsigned int i)
+{
+	TIMERn->ROUTE &= ~(TIMER_ROUTE_CC0PEN << i);
+}
+static inline void
+timern_(pin_cc_enable, unsigned int i)
+{
+	TIMERn->ROUTE |= TIMER_ROUTE_CC0PEN << i;
+}
 static inline void
 timern_(pin_cc2_disable, void)            { TIMERn->ROUTE &= ~(TIMER_ROUTE_CC2PEN); }
 static inline void
