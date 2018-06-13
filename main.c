@@ -1619,10 +1619,10 @@ usb_handle_endpoints(void)
 	if (usb_ep_flag_in(AC_ENDPOINT, flags))
 		usb_handle_audio_control_in();
 #ifdef ACM_DEBUG
-	if (usb_ep_flag_in(ACM_ENDPOINT, flags))
-		usb_handle_acm_in();
 	if (usb_ep_flag_out(ACM_ENDPOINT, flags))
 		usb_handle_acm_out();
+	if (usb_ep_flag_in(ACM_ENDPOINT, flags))
+		usb_handle_acm_in();
 #endif
 }
 
