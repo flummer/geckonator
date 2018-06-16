@@ -815,11 +815,20 @@ usb_ep_out_dma_address_set(unsigned int i, void *addr)
 
 /* USB_PCGCCTL */
 static inline uint32_t
-usb_phy_sleeping(void)                   { return USB->PCGCCTL & USB_PCGCCTL_PHYSLEEP; }
+usb_phy_sleeping(void)
+{
+	return USB->PCGCCTL & USB_PCGCCTL_PHYSLEEP;
+}
 static inline void
-usb_phy_stop(void)                       { USB->PCGCCTL = USB_PCGCCTL_STOPPCLK; }
+usb_phy_stop(void)
+{
+	USB->PCGCCTL = USB_PCGCCTL_GATEHCLK | USB_PCGCCTL_STOPPCLK;
+}
 static inline void
-usb_phy_start(void)                      { USB->PCGCCTL = 0; }
+usb_phy_start(void)
+{
+	USB->PCGCCTL = 0;
+}
 
 /* USB_FIFO0Dx */
 
