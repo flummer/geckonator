@@ -367,8 +367,16 @@ static const __align(4) struct usb_descriptor_configuration usb_descriptor_confi
 	}
 };
 
-static const struct usb_descriptor_configuration *const usb_descriptor_configuration[] = {
-	&usb_descriptor_configuration1,
+static void usb_configuration1_init(void);
+
+static const struct {
+	const struct usb_descriptor_configuration *desc;
+	void (*init)(void);
+} usb_configuration[] = {
+	{
+		.desc = &usb_descriptor_configuration1,
+		.init = &usb_configuration1_init,
+	},
 };
 
 static const __align(4) struct usb_descriptor_string usb_descriptor_string0 = {
@@ -435,6 +443,7 @@ static DMA_DESCRIPTORS(dma);
 static struct {
 	uint32_t bytes;
 	uint32_t packetsize;
+	uint8_t configuration;
 	uint8_t out_disabling;
 } usb_state;
 
@@ -712,6 +721,34 @@ dma_zerosamples(struct dma_descriptor *d, unsigned int samples)
 }
 
 static void
+usb_configuration1_init(void)
+{
+		/* configure audio control interrupt endpoint */
+		usb_ep_in_config_interrupt(AC_ENDPOINT, AC_PACKETSIZE);
+		usb_ep_flag_in_enable(AC_ENDPOINT);
+
+#ifdef ACM_DEBUG
+		/* configure CDC endpoint */
+		/* the chip doesn't support ep 4, but we never
+		 * use the  cdc interrupt anyway
+		usb_ep_in_config_interrupt(CDC_ENDPOINT, CDC_PACKETSIZE);
+		usb_ep_flag_in_enable(CDC_ENDPOINT);
+		*/
+
+		/* configure ACM endpoints */
+		usb_ep_in_config_bulk(ACM_ENDPOINT, ACM_PACKETSIZE);
+
+		usb_ep_out_dma_address_set(ACM_ENDPOINT, &acm_outbuf);
+		usb_ep_out_transfer_size(ACM_ENDPOINT, 1, ACM_PACKETSIZE);
+		usb_ep_out_config_bulk_enabled(ACM_ENDPOINT, ACM_PACKETSIZE);
+
+		usb_ep_flag_inout_enable(ACM_ENDPOINT);
+
+		acm_idle = true;
+#endif
+}
+
+static void
 usbac_notify_host(void)
 {
 	usbac_inbuf.bStatusType = 0x00; /* 0x00 = Audio Control interface */
@@ -932,11 +969,11 @@ usb_handle_get_descriptor_configuration(const void **data, uint8_t index)
 	const struct usb_descriptor_configuration *desc;
 
 	debug("GET_DESCRIPTOR: configuration %hu\r\n", index);
-	if (index >= ARRAY_SIZE(usb_descriptor_configuration)) {
+	if (index >= ARRAY_SIZE(usb_configuration)) {
 		debug("GET_DESCRIPTOR: unknown configuration %hu\r\n", index);
 		return -1;
 	}
-	desc = usb_descriptor_configuration[index];
+	desc = usb_configuration[index].desc;
 	*data = desc;
 	return desc->wTotalLength;
 }
@@ -984,7 +1021,7 @@ static int
 usb_handle_get_configuration(const struct usb_packet_setup *p, const void **data)
 {
 	debug("GET_CONFIGURATION\r\n");
-	usb_inbuf.u8[0] = usb_descriptor_configuration[0]->bConfigurationValue;
+	usb_inbuf.u8[0] = usb_state.configuration;
 	*data = &usb_inbuf;
 	return 1;
 }
@@ -995,29 +1032,9 @@ usb_handle_set_configuration(const struct usb_packet_setup *p, const void **data
 	debug("SET_CONFIGURATION: wIndex = %hu, wValue = %hu\r\n",
 			p->wIndex, p->wValue);
 
-	if (p->wIndex == 0 && p->wValue == usb_descriptor_configuration[0]->bConfigurationValue) {
-		/* configure audio control interrupt endpoint */
-		usb_ep_in_config_interrupt(AC_ENDPOINT, AC_PACKETSIZE);
-		usb_ep_flag_in_enable(AC_ENDPOINT);
-#ifdef ACM_DEBUG
-		/* configure CDC endpoint */
-		/* the chip doesn't support ep 4, but we never
-		 * use the  cdc interrupt anyway
-		usb_ep_in_config_interrupt(CDC_ENDPOINT, CDC_PACKETSIZE);
-		usb_ep_flag_in_enable(CDC_ENDPOINT);
-		*/
-
-		/* configure ACM endpoints */
-		usb_ep_in_config_bulk(ACM_ENDPOINT, ACM_PACKETSIZE);
-
-		usb_ep_out_dma_address_set(ACM_ENDPOINT, &acm_outbuf);
-		usb_ep_out_transfer_size(ACM_ENDPOINT, 1, ACM_PACKETSIZE);
-		usb_ep_out_config_bulk_enabled(ACM_ENDPOINT, ACM_PACKETSIZE);
-
-		usb_ep_flag_inout_enable(ACM_ENDPOINT);
-
-		acm_idle = true;
-#endif
+	if (p->wIndex == 0 && p->wValue == usb_configuration[0].desc->bConfigurationValue) {
+		usb_state.configuration = usb_configuration[0].desc->bConfigurationValue;
+		usb_configuration[0].init();
 		return 0;
 	}
 
