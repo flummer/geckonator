@@ -154,11 +154,9 @@ usb_flag_enumdone(uint32_t v)            { return v & USB_GINTSTS_ENUMDONE; }
 static inline uint32_t
 usb_flag_reset(uint32_t v)               { return v & USB_GINTSTS_USBRST; }
 static inline uint32_t
-usb_flag_suspend_usb(uint32_t v)         { return v & USB_GINTSTS_USBSUSP; }
+usb_flag_early_suspend(uint32_t v)       { return v & USB_GINTSTS_ERLYSUSP; }
 static inline uint32_t
-usb_flag_suspend_early(uint32_t v)       { return v & USB_GINTSTS_ERLYSUSP; }
-static inline uint32_t
-usb_flag_suspend(uint32_t v)             { return v & (USB_GINTSTS_USBSUSP | USB_GINTSTS_ERLYSUSP); }
+usb_flag_suspend(uint32_t v)             { return v & USB_GINTSTS_USBSUSP; }
 static inline uint32_t
 usb_flag_nak_out_effective(uint32_t v)   { return v & USB_GINTSTS_GOUTNAKEFF; }
 static inline uint32_t
