@@ -30,8 +30,8 @@
 #include "lib/dma.c"
 #include "lib/prs.c"
 
-//#define LEUART_DEBUG
-#define ACM_DEBUG
+#define LEUART_DEBUG
+//#define ACM_DEBUG
 #ifdef NDEBUG
 #undef LEUART_DEBUG
 #undef ACM_DEBUG
