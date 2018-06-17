@@ -342,6 +342,25 @@ usb_ep_flag_inout_enable(unsigned int i)
 
 /* USB_DIEP0CTL */
 static inline void
+usb_ep0in_config_64byte(void)
+{
+	USB->DIEP0CTL = (0 << _USB_DIEP0CTL_TXFNUM_SHIFT)
+		| USB_DIEP0CTL_MPS_64B;
+}
+static inline void
+usb_ep0in_config_64byte_stall(void)
+{
+	USB->DIEP0CTL = USB_DIEP0CTL_STALL
+		| (0 << _USB_DIEP0CTL_TXFNUM_SHIFT)
+		| USB_DIEP0CTL_MPS_64B;
+}
+static inline void
+usb_ep0in_config_8byte(void)
+{
+	USB->DIEP0CTL = (0 << _USB_DIEP0CTL_TXFNUM_SHIFT)
+		| USB_DIEP0CTL_MPS_8B;
+}
+static inline void
 usb_ep0in_enable(void)
 {
 	USB->DIEP0CTL |= USB_DIEP0CTL_EPENA | USB_DIEP0CTL_CNAK;
@@ -429,6 +448,11 @@ static inline void
 usb_ep_in_config_disabled(unsigned int i)
 {
 	USB->DIEP[i-1].CTL = 0;
+}
+static inline void
+usb_ep_in_config_disabled_nak(unsigned int i)
+{
+	USB->DIEP[i-1].CTL = USB_DIEP_CTL_SNAK;
 }
 static inline void
 usb_ep_in_config_control(unsigned int i, uint32_t mps)
@@ -571,6 +595,21 @@ usb_ep_in_dma_address_set(unsigned int i, const void *addr)
 
 /* USB_DOEP0CTL */
 static inline void
+usb_ep0out_config_64byte(void)
+{
+	USB->DOEP0CTL = USB_DOEP0CTL_MPS_64B;
+}
+static inline void
+usb_ep0out_config_64byte_stall(void)
+{
+	USB->DOEP0CTL = USB_DOEP0CTL_STALL | USB_DOEP0CTL_MPS_64B;
+}
+static inline void
+usb_ep0out_config_8byte(void)
+{
+	USB->DOEP0CTL = USB_DOEP0CTL_MPS_8B;
+}
+static inline void
 usb_ep0out_enable(void)
 {
 	USB->DOEP0CTL |= USB_DOEP0CTL_EPENA | USB_DOEP0CTL_CNAK;
@@ -664,6 +703,11 @@ static inline void
 usb_ep_out_config_disabled(unsigned int i)
 {
 	USB->DOEP[i-1].CTL = 0;
+}
+static inline void
+usb_ep_out_config_disabled_nak(unsigned int i)
+{
+	USB->DOEP[i-1].CTL = USB_DOEP_CTL_SNAK;
 }
 static inline void
 usb_ep_out_config_control_enabled(unsigned int i, uint32_t mps)
