@@ -2,13 +2,11 @@
 
 /* USB_CTRL */
 static inline void
-usb_vreg_sense_disable(void)             { USB->CTRL &= ~USB_CTRL_VREGOSEN; }
+usb_mode(uint32_t v)                     { USB->CTRL = v; }
 static inline void
-usb_vreg_sense_enable(void)              { USB->CTRL |= USB_CTRL_VREGOSEN; }
+usb_low_energy_disable(void)             { USB->CTRL &= ~USB_CTRL_LEMIDLEEN; }
 static inline void
-usb_vreg_enable(void)                    { USB->CTRL &= ~USB_CTRL_VREGDIS; }
-static inline void
-usb_vreg_disable(void)                   { USB->CTRL |= USB_CTRL_VREGDIS; }
+usb_low_energy_enable(void)              { USB->CTRL |= USB_CTRL_LEMIDLEEN; }
 
 /* USB_STATUS */
 static inline uint32_t
