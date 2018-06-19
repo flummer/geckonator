@@ -104,7 +104,9 @@ Reset_Handler:
 
 	/* clear bss with *r1++ = r0 (== 0) while r1 <= r2 */
 	movs	r0, #0
+	/* assume .bss follows .data
 	ldr	r1, =__bss_start__
+	*/
 	ldr	r2, =__bss_end__
 	b	4f
 .ltorg
