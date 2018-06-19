@@ -100,7 +100,7 @@ Reset_Handler:
 1:	ldmia	r0!, {r4}
 	stmia	r1!, {r4}
 2:	cmp	r1, r2
-	bls	1b
+	blt	1b
 
 	/* clear bss with *r1++ = r0 (== 0) while r1 <= r2 */
 	movs	r0, #0
@@ -110,7 +110,7 @@ Reset_Handler:
 .ltorg
 3:	stmia	r1!, {r0}
 4:	cmp	r1, r2
-	bls	3b
+	blt	3b
 	bl	main
 .size Reset_Handler, . - Reset_Handler
 .endfunc
