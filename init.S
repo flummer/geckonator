@@ -107,11 +107,16 @@ Reset_Handler:
 	/* assume .bss follows .data
 	ldr	r1, =__bss_start__
 	*/
-	ldr	r2, =__bss_end__
+	ldr	r3, =__bss_end__
+	/*
+	 * if .bss is empty we clear the first word of
+	 * whatever follows. that should be the top of
+	 * stack or start of heap which is fine
 	b	4f
 .ltorg
+	 */
 3:	stmia	r1!, {r0}
-4:	cmp	r1, r2
+4:	cmp	r1, r3
 	blt	3b
 	bl	main
 .size Reset_Handler, . - Reset_Handler
