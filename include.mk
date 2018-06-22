@@ -101,22 +101,32 @@ endif
 sources = init.S main.c
 objects = $(patsubst %,$(OUTDIR)/%.o,$(basename $(sources)))
 
+.SECONDEXPANSION:
 .PHONY: all release dis clean install flash dfu sdk
+.PRECIOUS: %.o $(OUTDIR)/ $(OUTDIR)%/
 
 all: $(OUTDIR)/$(NAME).bin
 
 release: CPPFLAGS += -DNDEBUG
 release: $(OUTDIR)/$(NAME).bin
 
-$(OUTDIR)/%.o: %.S $(MAKEFILE_LIST) | $(OUTDIR)
+$(OUTDIR)/:
+	$E '  MKDIR   $@'
+	$Q$(MKDIR_P) $@
+
+$(OUTDIR)%/:
+	$E '  MKDIR   $@'
+	$Q$(MKDIR_P) $@
+
+$(OUTDIR)/%.o: %.S $(MAKEFILE_LIST) | $$(@D)/
 	$E '  AS      $@'
 	$Q$(AS) -o $@ -c $(ASFLAGS) $(CPPFLAGS) $<
 
-$(OUTDIR)/%.o: %.c $(MAKEFILE_LIST) | $(OUTDIR)
+$(OUTDIR)/%.o: %.c $(MAKEFILE_LIST) | $$(@D)/
 	$E '  CC      $@'
 	$Q$(CC) -o $@ -c $(CFLAGS) $(CPPFLAGS) $<
 
-$(OUTDIR)/$(NAME).elf: $(objects) $(MAKEFILE_LIST)
+$(OUTDIR)/$(NAME).elf: $$(objects) $(MAKEFILE_LIST)
 	$E '  LD      $@'
 	$Q$(CC) -o $@ $(LDFLAGS) $(objects) $(LIBS)
 
@@ -133,24 +143,20 @@ $(OUTDIR)/%.lss: $(OUTDIR)/%.elf $(MAKEFILE_LIST)
 	$E '  OBJDUMP $@'
 	$Q$(DIS) $< > $@
 
-$(OUTDIR):
-	$E '  MKDIR   $@'
-	$Q$(MKDIR_P) $@
+$(DESTDIR):
+	$E '  INSTALL $@'
+	$Q$(INSTALL) -dm755 '$(DESTDIR)'
 
 $(DESTDIR)/$(NAME).bin: $(OUTDIR)/$(NAME).bin | $(DESTDIR)
 	$E '  INSTALL $@'
 	$Q$(INSTALL) -m644 '$<' '$@'
 
-$(DESTDIR):
-	$E '  INSTALL $@'
-	$Q$(INSTALL) -dm755 '$(DESTDIR)'
-
 dis: $(OUTDIR)/$(NAME).lss
 	$(PAGER) $<
 
 clean:
-	$E '  RM      $(OUTDIR)'
-	$Q$(RM_RF) $(OUTDIR)
+	$E '  RM      $(OUTDIR)/'
+	$Q$(RM_RF) $(OUTDIR)/
 
 install: $(DESTDIR)/$(NAME).bin
 
