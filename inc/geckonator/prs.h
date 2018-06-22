@@ -1,3 +1,6 @@
+#ifndef _GECKONATOR_PRS_H
+#define _GECKONATOR_PRS_H
+
 #include "common.h"
 
 /* PRS_SWPULSE */
@@ -69,3 +72,5 @@ prs_channel_config(unsigned int i, uint32_t v)
 }
 
 /* PRS_TRACECTRL */
+
+#endif

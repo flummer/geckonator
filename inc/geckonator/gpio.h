@@ -1,3 +1,6 @@
+#ifndef _GECKONATOR_GPIO_H
+#define _GECKONATOR_GPIO_H
+
 #include "common.h"
 
 #ifdef GPIO_TYPE_STRUCT
@@ -17,7 +20,7 @@ static inline unsigned int
 gpio_port(gpio_pin_t pin)          { return pin.port; }
 static inline unsigned int
 gpio_nr(gpio_pin_t pin)            { return pin.nr; }
-static inline bool
+static inline unsigned int
 gpio_pin_eq(gpio_pin_t a, gpio_pin_t b)
 {
 	return (a.port == b.port) && (a.nr == b.nr);
@@ -46,7 +49,7 @@ gpio_nr(gpio_pin_t pin)            { return pin & 0xFFU; }
 
 #endif
 
-static inline bool
+static inline unsigned int
 gpio_pin_eq(gpio_pin_t a, gpio_pin_t b)
 {
 	return a == b;
@@ -156,27 +159,27 @@ gpio_pin_eq(gpio_pin_t a, gpio_pin_t b)
 #define GPIO_PF15 GPIO_PIN(5, 15)
 
 /* GPIO_Px_CTRL */
-static void
+static inline void
 gpio_drive_strength(unsigned int port, uint32_t v)
 {
 	GPIO->P[port].CTRL = v;
 }
-static void __unused
+static inline void
 gpio_drive_strength_standard(gpio_pin_t pin)
 {
 	gpio_drive_strength(gpio_port(pin), GPIO_P_CTRL_DRIVEMODE_STANDARD);
 }
-static void __unused
+static inline void
 gpio_drive_strength_lowest(gpio_pin_t pin)
 {
 	gpio_drive_strength(gpio_port(pin), GPIO_P_CTRL_DRIVEMODE_LOWEST);
 }
-static void __unused
+static inline void
 gpio_drive_strength_high(gpio_pin_t pin)
 {
 	gpio_drive_strength(gpio_port(pin), GPIO_P_CTRL_DRIVEMODE_HIGH);
 }
-static void __unused
+static inline void
 gpio_drive_strength_low(gpio_pin_t pin)
 {
 	gpio_drive_strength(gpio_port(pin), GPIO_P_CTRL_DRIVEMODE_LOW);
@@ -202,24 +205,7 @@ enum gpio_mode {
 	GPIO_MODE_WIREDANDDRIVEPULLUP       = 0x0EU,
 	GPIO_MODE_WIREDANDDRIVEPULLUPFILTER = 0x0FU,
 };
-
-static void __unused
-gpio_mode(gpio_pin_t pin, uint32_t mode)
-{
-	volatile uint32_t *reg;
-	uint32_t pinshift;
-	uint32_t mask;
-	unsigned int port = gpio_port(pin);
-
-	if (gpio_nr(pin) & 0x8U)
-		reg = &GPIO->P[port].MODEH;
-	else
-		reg = &GPIO->P[port].MODEL;
-
-	pinshift = 4*(gpio_nr(pin) & 0x7U);
-	mask = 0xFU << pinshift;
-	*reg = (*reg & ~mask) | (mode << pinshift);
-}
+extern void gpio_mode(gpio_pin_t pin, uint32_t mode);
 
 /* GPIO_Px_DOUT */
 
@@ -254,43 +240,27 @@ gpio_in(gpio_pin_t pin)
 /* GPIO_Px_PINLOCKN */
 
 /* GPIO_EXTIPSELy */
-static void __unused
-gpio_flag_select(gpio_pin_t pin)
-{
-	volatile uint32_t *reg;
-	uint32_t pinshift;
-	uint32_t mask;
-	unsigned int port = gpio_port(pin);
-
-	if (gpio_nr(pin) & 0x8U)
-		reg = &GPIO->EXTIPSELH;
-	else
-		reg = &GPIO->EXTIPSELL;
-
-	pinshift = 4*(gpio_nr(pin) & 0x7U);
-	mask = 0xFU << pinshift;
-	*reg = (*reg & ~mask) | (port << pinshift);
-}
+extern void gpio_flag_select(gpio_pin_t pin);
 
 /* GPIO_EXTIRISE */
-static void __unused
+static inline void
 gpio_flag_rising_disable(gpio_pin_t pin)
 {
 	GPIO->EXTIRISE &= ~(1U << gpio_nr(pin));
 }
-static void __unused
+static inline void
 gpio_flag_rising_enable(gpio_pin_t pin)
 {
 	GPIO->EXTIRISE |= 1U << gpio_nr(pin);
 }
 
 /* GPIO_EXTIFALL */
-static void __unused
+static inline void
 gpio_flag_falling_disable(gpio_pin_t pin)
 {
 	GPIO->EXTIFALL &= ~(1U << gpio_nr(pin));
 }
-static void __unused
+static inline void
 gpio_flag_falling_enable(gpio_pin_t pin)
 {
 	GPIO->EXTIFALL |= 1U << gpio_nr(pin);
@@ -301,11 +271,11 @@ static inline void
 gpio_flags_disable_all(void)       { GPIO->IEN = 0; }
 static inline uint32_t
 gpio_flags_enabled(uint32_t v)     { return v & GPIO->IEN; }
-static void __unused
+static inline void
 gpio_flag_disable(gpio_pin_t pin)  { GPIO->IEN &= ~(1U << gpio_nr(pin)); }
-static void __unused
+static inline void
 gpio_flag_enable(gpio_pin_t pin)   { GPIO->IEN |= 1U << gpio_nr(pin); }
-static uint32_t __unused
+static inline uint32_t
 gpio_flag_enabled(gpio_pin_t pin)  { return GPIO->IEN & (1U << gpio_nr(pin)); }
 
 /* GPIO_IF */
@@ -315,7 +285,7 @@ static inline uint32_t
 gpio_flags_even(void)              { return GPIO->IF & 0x5555U; }
 static inline uint32_t
 gpio_flags_odd(void)               { return GPIO->IF & 0xAAAAU; }
-static uint32_t __unused
+static inline uint32_t
 gpio_flag(uint32_t flags, gpio_pin_t pin)
 {
 	return flags & (1U << gpio_nr(pin));
@@ -324,7 +294,7 @@ gpio_flag(uint32_t flags, gpio_pin_t pin)
 /* GPIO_IFS */
 static inline void
 gpio_flags_set(uint32_t v)         { GPIO->IFS = v; }
-static void __unused
+static inline void
 gpio_flag_set(gpio_pin_t pin)      { GPIO->IFS = 1U << gpio_nr(pin); }
 
 /* GPIO_IFC */
@@ -336,7 +306,7 @@ static inline void
 gpio_flags_clear_even(uint32_t v)  { GPIO->IFC = v & 0x5555U; }
 static inline void
 gpio_flags_clear_odd(uint32_t v)   { GPIO->IFC = v & 0xAAAAU; }
-static void __unused
+static inline void
 gpio_flag_clear(gpio_pin_t pin)    { GPIO->IFC = 1U << gpio_nr(pin); }
 
 /* GPIO_ROUTE */
@@ -391,3 +361,5 @@ gpio_wakeup_rising(uint32_t v)     { GPIO->EM4WUPOL = v; }
 /* GPIO_EM4WUCAUSE */
 static inline uint32_t
 gpio_wakeup_cause(void)            { return GPIO->EM4WUCAUSE; }
+
+#endif

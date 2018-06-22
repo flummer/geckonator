@@ -1,3 +1,6 @@
+#ifndef _GECKONATOR_DMA_H
+#define _GECKONATOR_DMA_H
+
 #include "common.h"
 
 struct dma_descriptor {
@@ -259,3 +262,5 @@ dma_channel_config(unsigned int i, uint32_t v)
 {
 	DMA->CH[i].CTRL = v;
 }
+
+#endif

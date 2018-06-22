@@ -1,3 +1,6 @@
+#ifndef _GECKONATOR_FLASH_H
+#define _GECKONATOR_FLASH_H
+
 #include "common.h"
 
 /* MSC_CTRL */
@@ -93,3 +96,5 @@ flash_cache_invalidate(void)        { MSC->CMD = MSC_CMD_INVCACHE; }
 /* MSC_CACHEHITS */
 static inline uint32_t
 flash_cache_hits(void)              { return MSC->CACHEHITS; }
+
+#endif

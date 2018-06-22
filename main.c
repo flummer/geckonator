@@ -20,9 +20,9 @@
 #include <stdbool.h>
 #include <stdio.h>
 
-#include "lib/clock.c"
-#include "lib/gpio.c"
-#include "lib/rtc.c"
+#include "geckonator/clock.h"
+#include "geckonator/gpio.h"
+#include "geckonator/rtc.h"
 
 #define LED       GPIO_PA0
 #define DELAY_MS  500

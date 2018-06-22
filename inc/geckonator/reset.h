@@ -1,3 +1,6 @@
+#ifndef _GECKONATOR_RESET_H
+#define _GECKONATOR_RESET_H
+
 #include "common.h"
 
 /* RMU_CTRL */
@@ -15,10 +18,6 @@ reset_cause(void)          { return RMU->RSTCAUSE; }
 static inline void
 reset_cause_clear(void)    { RMU->CMD = RMU_CMD_RCCLR; }
 
-static void __unused
-reset_cause_clear_all(void)
-{
-	reset_cause_clear();
-	EMU->AUXCTRL = EMU_AUXCTRL_HRCCLR;
-	EMU->AUXCTRL = 0;
-}
+extern void reset_cause_clear_all(void);
+
+#endif

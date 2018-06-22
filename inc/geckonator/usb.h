@@ -1,3 +1,6 @@
+#ifndef _GECKONATOR_USB_H
+#define _GECKONATOR_USB_H
+
 #include "common.h"
 
 /* USB_CTRL */
@@ -881,3 +884,5 @@ usb_phy_start(void)
 /* USB_FIFO3Dx */
 
 /* USB_FIFORAMx */
+
+#endif

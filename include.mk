@@ -74,13 +74,14 @@ GECKO_SDK  = ../Gecko_SDK
 
 OPT        = -Os
 ARCHFLAGS  = -mthumb -mcpu=cortex-m0plus
-CFLAGS     = $(ARCHFLAGS) $(OPT) -ggdb -pipe -Wall -Wextra -Wno-main -Wno-unused-parameter -fdata-sections -ffunction-sections -fstack-usage
+CFLAGS     = $(ARCHFLAGS) $(OPT) -ggdb -pipe -Wall -Wextra -Wno-main -Wno-unused-parameter $(LTO) -fdata-sections -ffunction-sections -fstack-usage
 ASFLAGS    = $(ARCHFLAGS)
-CPPFLAGS   = -iquote '$(TOPDIR)SiliconLabs' -iquote '$(TOPDIR:%/=%)' -D$(CHIP) -D__STACK_SIZE=$(STACK)
+CPPFLAGS   = -iquote '$(TOPDIR)SiliconLabs' -iquote '$(TOPDIR:%/=%)/inc' -D$(CHIP) -D__STACK_SIZE=$(STACK)
 LIBS       = -lc -lm -lnosys
-LDFLAGS    = $(ARCHFLAGS) -nostartfiles -specs=nano.specs -Wl,-O1,--gc-sections -L '$(TOPDIR)lib' -T $(LDSCRIPT)
+LDFLAGS    = $(ARCHFLAGS) $(LTO) $(OPT) -nostartfiles -specs=nano.specs -Wl,-O1,--gc-sections -L '$(TOPDIR)lib' -T $(LDSCRIPT)
 
 ifndef OLD
+LTO        = -flto
 ARCHFLAGS += -masm-syntax-unified
 CPPFLAGS  += -DGPIO_TYPE_STRUCT
 LDFLAGS   += -Wl,--defsym,__flash_size=$(FLASH),--defsym,__bootloader_size=$(BOOTLOADER)
@@ -98,7 +99,7 @@ E=@echo
 Q=@
 endif
 
-sources = init.S main.c
+sources = init.S geckonator.c main.c
 objects = $(patsubst %,$(OUTDIR)/%.o,$(basename $(sources)))
 
 .SECONDEXPANSION:

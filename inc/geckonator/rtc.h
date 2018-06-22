@@ -1,3 +1,6 @@
+#ifndef _GECKONATOR_RTC_H
+#define _GECKONATOR_RTC_H
+
 #include "common.h"
 
 /* RTC_CTRL */
@@ -97,3 +100,5 @@ rtc_update(void)                { RTC->FREEZE = RTC_FREEZE_REGFREEZE_UPDATE; }
 /* RTC_SYNCBUSY */
 static inline uint32_t
 rtc_syncbusy(void)              { return RTC->SYNCBUSY; }
+
+#endif

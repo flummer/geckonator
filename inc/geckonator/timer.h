@@ -1,5 +1,5 @@
-#ifndef _TIMER_H
-#define _TIMER_H
+#ifndef _GECKONATOR_TIMER_H
+#define _GECKONATOR_TIMER_H
 
 enum timer_config {
 	TIMER_CONFIG_DEBUGRUN   = TIMER_CTRL_DEBUGRUN,

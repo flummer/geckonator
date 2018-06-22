@@ -1,3 +1,6 @@
+#ifndef _GECKONATOR_CLOCK_H
+#define _GECKONATOR_CLOCK_H
+
 #include "common.h"
 
 /* CMU_CMD */
@@ -410,4 +413,4 @@ static inline void clock_ushfrco_24mhz(void)
 	CMU->USHFRCOCONF = CMU_USHFRCOCONF_USHFRCODIV2DIS | CMU_USHFRCOCONF_BAND_24MHZ;
 }
 
-
+#endif

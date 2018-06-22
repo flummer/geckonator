@@ -1,5 +1,5 @@
-#ifndef _I2C_H
-#define _I2C_H
+#ifndef _GECKONATOR_I2C_H
+#define _GECKONATOR_I2C_H
 
 enum i2c_config {
 	I2C_CONFIG_ENABLE = I2C_CTRL_EN,

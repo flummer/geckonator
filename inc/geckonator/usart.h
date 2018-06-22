@@ -1,5 +1,5 @@
-#ifndef _USART_H
-#define _USART_H
+#ifndef _GECKONATOR_USART_H
+#define _GECKONATOR_USART_H
 
 enum usart_flags {
 	USART_FLAG_COLLISION       = USART_IF_CCF,
