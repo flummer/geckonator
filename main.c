@@ -25,6 +25,8 @@
 #include "geckonator/leuart0.h"
 #include "geckonator/usb.h"
 
+#include "swd.h"
+
 //#define LEUART_DEBUG
 #define ACM_DEBUG
 #ifdef NDEBUG
@@ -296,6 +298,8 @@ static __uninitialized union {
 } usb_inbuf;
 
 #ifdef ACM_DEBUG
+static volatile uint8_t swd_cmd;
+
 static __uninitialized union {
 	uint32_t word[ACM_PACKETSIZE/sizeof(uint32_t)];
 	uint8_t byte[ACM_PACKETSIZE];
@@ -873,7 +877,7 @@ usb_handle_ep0(void)
 	usb_ep0out_flags_clear(oflags);
 	usb_ep0in_flags_clear(iflags);
 
-	debug("EP0 %04lx %04lx %lu\r\n", oflags, iflags, usb_state.bytes);
+	//debug("EP0 %04lx %04lx %lu\r\n", oflags, iflags, usb_state.bytes);
 
 	if (usb_ep0out_flag_setup(oflags)) {
 		usb_handle_setup();
@@ -956,6 +960,15 @@ usb_handle_acm_out(void)
 	bytes = ACM_PACKETSIZE - usb_ep_out_bytes_left(ACM_ENDPOINT);
 
 	acm_writeln(acm_outbuf.byte, bytes);
+	for (uint8_t *p = acm_outbuf.byte; bytes > 0; bytes--) {
+		uint8_t b = *p++;
+
+		switch (b) {
+		case 'r': swd_cmd = 1; break;
+		case 's': swd_cmd = 2; break;
+		case 'c': swd_cmd = 3; break;
+		}
+	}
 
 	usb_ep_out_dma_address_set(ACM_ENDPOINT, &acm_outbuf);
 	usb_ep_out_transfer_size(ACM_ENDPOINT, 1, ACM_PACKETSIZE);
@@ -1119,6 +1132,8 @@ main(void)
 	clock_hfrco_disable();
 	clock_auxhfrco_disable();
 
+	clock_peripheral_div1();
+
 	clock_le_enable();
 #ifdef LEUART_DEBUG
 	/* route 24MHz core clock / 2 / 8 to LEUART0 */
@@ -1163,8 +1178,33 @@ main(void)
 	usb_init();
 	gpio_set(LED_GREEN);
 
+	swd_init();
+
 	/* sleep when not interrupted */
 	while (1) {
+#ifdef ACM_DEBUG
+		int ret;
+		uint32_t v;
+
+		switch (swd_cmd) {
+		case 1:
+			debug("\r\n");
+			ret = swd_dp_init(&v);
+			debug("(%d) dp_init == 0x%08lx\r\n", ret, v);
+			break;
+		case 2:
+			debug("\r\n");
+			ret = swd_read(SWD_DP_STAT, &v);
+			debug("(%d) stat   == 0x%08lx\r\n", ret, v);
+			break;
+		case 3:
+			debug("\r\n");
+			ret = swd_armv6m_reset_debug();
+			debug("(%d) armv6m_reset_debug\r\n", ret);
+			break;
+		}
+		swd_cmd = 0;
+#endif
 		__WFI();
 	}
 }

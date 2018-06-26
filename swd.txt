@@ -1,0 +1,14 @@
+         SWDCLK   SWDIO
+         (CLK)    (TX)
+
+USART0:  PE12     PE10
+         PC15     PE13
+         PB13     PB7
+         PB13     PC0
+         PE12     PC0
+
+USART1:  PB7      PC0
+         PF0      PD7
+         PC15     PD7
+         PB11     PF2
+         PC3      PC1

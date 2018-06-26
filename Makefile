@@ -16,6 +16,9 @@
 
 include include.mk
 
+sources += swd-usart1.c
+sources += swd.c
+
 CHIP   = EFM32HG322F64
 STTY   = stty
 CAT    = cat
