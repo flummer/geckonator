@@ -15,14 +15,9 @@ usartn_(frame_8n1, void)
 		      | USART_FRAME_DATABITS_EIGHT;
 }
 static inline void
-usartn_(frame_8bit, void)
+usartn_(frame_bits, unsigned int n)
 {
-	USARTn->FRAME = USART_FRAME_DATABITS_EIGHT;
-}
-static inline void
-usartn_(frame_16bit, void)
-{
-	USARTn->FRAME = USART_FRAME_DATABITS_SIXTEEN;
+	USARTn->FRAME = n - 3;
 }
 
 /* USARTn_TRIGCTRL */
@@ -54,6 +49,8 @@ static inline void
 usartn_(rx_disable, void)                 { USARTn->CMD = USART_CMD_RXDIS; }
 static inline void
 usartn_(rx_enable, void)                  { USARTn->CMD = USART_CMD_RXEN; }
+static inline void
+usartn_(rx_disable_and_clear, void)       { USARTn->CMD = USART_CMD_RXDIS | USART_CMD_CLEARRX; }
 static inline void
 usartn_(rxtx_disable, void)               { USARTn->CMD = USART_CMD_TXDIS | USART_CMD_RXDIS; }
 static inline void
@@ -94,13 +91,13 @@ usartn_(clock_div, uint32_t v)            { USARTn->CLKDIV = v; }
 /* USARTn_RXDATAX */
 
 /* USARTn_RXDATA */
-static inline uint8_t
+static inline uint32_t
 usartn_(rxdata, void)                     { return USARTn->RXDATA; }
 
 /* USARTn_RXDOUBLEX */
 
 /* USARTn_RXDOUBLE */
-static inline uint16_t
+static inline uint32_t
 usartn_(rxdouble, void)                   { return USARTn->RXDOUBLE; }
 
 /* USARTn_RXDATAXP */
@@ -108,16 +105,20 @@ usartn_(rxdouble, void)                   { return USARTn->RXDOUBLE; }
 /* USARTn_RXDOUBLXP */
 
 /* USARTn_TXDATAX */
+static inline void
+usartn_(txdatax, uint32_t v)              { USARTn->TXDATAX = v; }
 
 /* USARTn_TXDATA */
 static inline void
-usartn_(txdata, uint8_t v)                { USARTn->TXDATA = v; }
+usartn_(txdata, uint32_t v)               { USARTn->TXDATA = v; }
 
 /* USARTn_TXDOUBLEX */
+static inline void
+usartn_(txdoublex, uint32_t v)            { USARTn->TXDOUBLEX = v; }
 
 /* USARTn_TXDOUBLE */
 static inline void
-usartn_(txdouble, uint16_t v)             { USARTn->TXDOUBLE = v; }
+usartn_(txdouble, uint32_t v)             { USARTn->TXDOUBLE = v; }
 
 /* USARTn_IF */
 static inline uint32_t
