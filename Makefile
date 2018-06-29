@@ -18,6 +18,7 @@ include include.mk
 
 sources += swd-usart1.c
 sources += swd.c
+sources += ihex.c
 sources += nRF51prog.c
 
 CHIP   = EFM32HG322F64
@@ -28,3 +29,6 @@ SERIAL = /dev/ttyUSB0
 cat: | $(SERIAL)
 	$(STTY) -F'$(SERIAL)' raw -echo -hup cs8 -parenb -cstopb 115200
 	$(CAT) '$(SERIAL)'
+
+ihex: ihex.c
+	gcc -o '$@' -O2 -Wall -Wextra -DSTANDALONE '$^'
