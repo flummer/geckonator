@@ -26,6 +26,8 @@
 #include "geckonator/usb.h"
 
 #include "swd.h"
+#include "ihex.h"
+#include "nRF51prog.h"
 
 //#define LEUART_DEBUG
 #define ACM_DEBUG
@@ -51,13 +53,16 @@
 #define USB_FIFO_TX2SIZE 64
 #define USB_FIFO_TX3SIZE 0
 
-#define DFU_INTERFACE 0
+#define DFUR_INTERFACE 0
 
-#define CDC_INTERFACE 1
+#define DFU_INTERFACE 1
+#define DFU_TRANSFERSIZE 512
+
+#define CDC_INTERFACE 2
 #define CDC_PACKETSIZE 64
 #define CDC_ENDPOINT 2
 
-#define ACM_INTERFACE 2
+#define ACM_INTERFACE 3
 #define ACM_ENDPOINT 1
 #define ACM_PACKETSIZE 64
 
@@ -130,11 +135,11 @@ static const __align(4) struct usb_descriptor_configuration usb_descriptor_confi
 	.bLength              = 9,
 	.bDescriptorType      = 0x02, /* Configuration */
 #ifdef ACM_DEBUG
-	.wTotalLength         = 9 + 18 + 58,
-	.bNumInterfaces       = 1 + 2,
+	.wTotalLength         = 9 + 18 + 18 + 58,
+	.bNumInterfaces       = 1 + 1 + 2,
 #else
-	.wTotalLength         = 9 + 18,
-	.bNumInterfaces       = 1,
+	.wTotalLength         = 9 + 18 + 18,
+	.bNumInterfaces       = 1 + 1,
 #endif
 	.bConfigurationValue  = 1,
 	.iConfiguration       = 0,
@@ -144,7 +149,7 @@ static const __align(4) struct usb_descriptor_configuration usb_descriptor_confi
 	/* Interface */
 	/* .bLength                */ 9,
 	/* .bDescriptorType        */ 0x04, /* Interface */
-	/* .bInterfaceNumber       */ DFU_INTERFACE,
+	/* .bInterfaceNumber       */ DFUR_INTERFACE,
 	/* .bAlternateSetting      */ 0,
 	/* .bNumEndpoints          */ 0,
 	/* .bInterfaceClass        */ 0xfe, /* 0xfe = Application Specific */
@@ -156,7 +161,24 @@ static const __align(4) struct usb_descriptor_configuration usb_descriptor_confi
 	/* .bDescriptorType        */ 0x21, /* DFU Interface */
 	/* .bmAttributes           */ 0x08, /* will detach usb on DFU_DETACH */
 	/* .wDetachTimeOut         */ USB_WORD(50), /* 50ms */
-	/* .wTransferSize          */ USB_WORD(FLASH_PAGE_SIZE),
+	/* .wTransferSize          */ USB_WORD(DFU_TRANSFERSIZE),
+	/* .bcdDFUVersion          */ USB_WORD(0x0101), /* DFU v1.1 */
+	/* Interface */
+	/* .bLength                */ 9,
+	/* .bDescriptorType        */ 0x04, /* Interface */
+	/* .bInterfaceNumber       */ DFU_INTERFACE,
+	/* .bAlternateSetting      */ 0,
+	/* .bNumEndpoints          */ 0,    /* only the control pipe is used */
+	/* .bInterfaceClass        */ 0xFE, /* application specific */
+	/* .bInterfaceSubClass     */ 0x01, /* device firmware upgrade */
+	/* .bInterfaceProtocol     */ 0x02, /* DFU mode protocol */
+	/* .iInterface             */ 5,
+	/* DFU Interface */
+	/* .bLength                */ 9,
+	/* .bDescriptorType        */ 0x21, /* DFU Interface */
+	/* .bmAttributes           */ 0x05, /* can download, can't upload, manifest tolerant */
+	/* .wDetachTimeOut         */ USB_WORD(500), /* 500ms */
+	/* .wTransferSize          */ USB_WORD(DFU_TRANSFERSIZE),
 	/* .bcdDFUVersion          */ USB_WORD(0x0101), /* DFU v1.1 */
 #ifdef ACM_DEBUG
 	/* Interface */
@@ -264,11 +286,19 @@ static const __align(4) struct usb_descriptor_string usb_descriptor_serial = {
 	},
 };
 
-static const __align(4) struct usb_descriptor_string usb_descriptor_dfu = {
+static const __align(4) struct usb_descriptor_string usb_descriptor_dfu_geckoboot = {
 	.bLength         = 20,
 	.bDescriptorType = 0x03, /* String */
 	.wCodepoint = {
 		'G','e','c','k','o','B','o','o','t',
+	},
+};
+
+static const __align(4) struct usb_descriptor_string usb_descriptor_dfu_nRF51 = {
+	.bLength         = 12,
+	.bDescriptorType = 0x03, /* String */
+	.wCodepoint = {
+		'n','R','F','5','1',
 	},
 };
 
@@ -277,7 +307,8 @@ static const struct usb_descriptor_string *const usb_descriptor_string[] = {
 	&usb_descriptor_vendor,
 	&usb_descriptor_product,
 	&usb_descriptor_serial,
-	&usb_descriptor_dfu,
+	&usb_descriptor_dfu_geckoboot,
+	&usb_descriptor_dfu_nRF51,
 };
 
 static struct {
@@ -286,7 +317,7 @@ static struct {
 } usb_state;
 
 static __uninitialized uint32_t usb_outbuf[
-	(4*sizeof(struct usb_packet_setup) + 64) / sizeof(uint32_t)
+	(4*sizeof(struct usb_packet_setup) + DFU_TRANSFERSIZE) / sizeof(uint32_t)
 ];
 static __uninitialized union {
 	int8_t    i8[4];
@@ -682,6 +713,8 @@ usb_handle_set_interface(const struct usb_packet_setup *p, const void **data)
 {
 	debug("SET_INTERFACE: wIndex = %hu, wValue = %hu\r\n", p->wIndex, p->wValue);
 
+	if (p->wIndex == DFUR_INTERFACE && p->wValue == 0)
+		return 0;
 	if (p->wIndex == DFU_INTERFACE && p->wValue == 0)
 		return 0;
 #ifdef ACM_DEBUG
@@ -709,7 +742,51 @@ usb_handle_clear_feature_endpoint(const struct usb_packet_setup *p, const void *
 	return -1;
 }
 
+enum dfu_status {
+	DFU_OK,
+	DFU_errTARGET,
+	DFU_errFILE,
+	DFU_errWRITE,
+	DFU_errERASE,
+	DFU_errCHECK_ERASED,
+	DFU_errPROG,
+	DFU_errVERIFY,
+	DFU_errADDRESS,
+	DFU_errNOTDONE,
+	DFU_errFIRMWARE,
+	DFU_errVENDOR,
+	DFU_errUSBR,
+	DFU_errPOR,
+	DFU_errUNKNOWN,
+	DFU_errSTALLEDPKT,
+};
+
+enum dfu_state {
+	DFU_appIDLE,
+	DFU_appDETACH,
+	DFU_dfuIDLE,
+	DFU_dfuDNLOAD_SYNC,
+	DFU_dfuDNBUSY,
+	DFU_dfuDNLOAD_IDLE,
+	DFU_dfuMANIFEST_SYNC,
+	DFU_dfuMANIFEST,
+	DFU_dfuMANIFEST_WAIT_RESET,
+	DFU_dfuUPLOAD_IDLE,
+	DFU_dfuERROR,
+};
+
+static __align(4) struct {
+	uint8_t bStatus;
+	uint8_t bwPollTimeout[3];
+	volatile uint8_t bState;
+	uint8_t iString;
+} dfu_status;
+
 static bool dfu_reset;
+
+static struct ihex_parser ihex_parser;
+static uint16_t indata_len;
+static uint8_t indata[DFU_TRANSFERSIZE];
 
 static int
 usb_handle_dfu_detach(const struct usb_packet_setup *p, const void **data)
@@ -717,11 +794,153 @@ usb_handle_dfu_detach(const struct usb_packet_setup *p, const void **data)
 	debug("DFU_DETACH: wValue = %hu, wIndex = %hu\r\n",
 			p->wValue, p->wIndex);
 
-	if (p->wIndex != DFU_INTERFACE)
+	if (p->wIndex != DFUR_INTERFACE)
 		return -1;
 
 	dfu_reset = true;
 	return 0;
+}
+
+static int
+usb_handle_dfu_dnload(const struct usb_packet_setup *p, const void **data)
+{
+	debug("DFU_DNLOAD: wValue = %hu, wIndex = %hu, wLength = %hu\r\n",
+			p->wValue, p->wIndex, p->wLength);
+
+	if (p->wIndex != DFU_INTERFACE)
+		return -1;
+
+	if (dfu_status.bState == DFU_dfuIDLE) {
+		int ret;
+		uint32_t v;
+		debug("init parser\r\n");
+		ihex_init(&ihex_parser);
+		swd_engage();
+		ret = swd_dp_init(&v);
+		debug("(%u) swd_dp_init = 0x%08lx\r\n", ret, v);
+		if (ret != SWD_OK)
+			goto err;
+		ret = swd_armv6m_reset_debug();
+		debug("(%u) swd_armv6m_reset_debug\r\n", ret);
+		if (ret != SWD_OK)
+			goto err;
+		ret = nRF51_erase();
+		debug("(%u) nRF51_erase\r\n", ret);
+		if (ret != SWD_OK)
+			goto err;
+	} else if (dfu_status.bState != DFU_dfuDNLOAD_IDLE)
+		return -1;
+
+	if (p->wLength == 0) {
+		dfu_status.bState = DFU_dfuMANIFEST_SYNC;
+		return 0;
+	}
+
+	memcpy(indata, *data, p->wLength);
+	indata_len = p->wLength;
+
+	dfu_status.bState = DFU_dfuDNBUSY;
+	return 0;
+err:
+	dfu_status.bStatus = DFU_errWRITE;
+	return 0;
+}
+
+#if 0
+static int
+usb_handle_dfu_upload(const struct usb_packet_setup *p, const void **data)
+{
+	debug("DFU_UPLOAD: wValue = %hu, wIndex = %hu, wLength = %hu\r\n",
+			p->wValue, p->wIndex, p->wLength);
+
+	if (p->wIndex != DFU_INTERFACE)
+		return -1;
+
+	if (dfu_status.bState != DFU_dfuIDLE && dfu_status.bState != DFU_dfuUPLOAD_IDLE)
+		return -1;
+
+	if (p->wValue < (FLASH_TOTAL_PAGES - FLASH_PAGE_OFFSET)) {
+		dfu_status.bState = DFU_dfuUPLOAD_IDLE;
+		*data = FLASH_ADDRESS + (FLASH_PAGE_OFFSET + p->wValue) * FLASH_PAGE_SIZE;
+		return FLASH_PAGE_SIZE;
+	}
+
+	dfu_status.bState = DFU_dfuIDLE;
+	return 0;
+}
+#endif
+
+static int
+usb_handle_dfu_getstatus(const struct usb_packet_setup *p, const void **data)
+{
+#if 0
+	debug("DFU_GETSTATUS: wIndex = %hu, wValue = %hu, wLength = %hu\r\n",
+			p->wIndex, p->wValue, p->wLength);
+#endif
+
+	if (p->wIndex != DFU_INTERFACE)
+		return -1;
+
+	switch (dfu_status.bState) {
+	case DFU_dfuDNLOAD_SYNC:
+		dfu_status.bState = DFU_dfuDNLOAD_IDLE;
+		break;
+	case DFU_dfuMANIFEST_SYNC:
+		dfu_status.bState = DFU_dfuIDLE;
+		break;
+	}
+
+	*data = &dfu_status;
+	return sizeof(dfu_status);
+}
+
+static int
+usb_handle_dfu_clrstatus(const struct usb_packet_setup *p, const void **data)
+{
+	debug("DFU_CLRSTATUS\r\n");
+
+	if (p->wIndex != DFU_INTERFACE)
+		return -1;
+
+	if (dfu_status.bState != DFU_dfuERROR)
+		return -1;
+
+	dfu_status.bStatus = DFU_OK;
+	dfu_status.bState = DFU_dfuIDLE;
+	return 0;
+}
+
+static int
+usb_handle_dfu_getstate(const struct usb_packet_setup *p, const void **data)
+{
+	debug("DFU_GETSTATE\r\n");
+
+	if (p->wIndex != DFU_INTERFACE)
+		return -1;
+
+	usb_inbuf.u8[0] = dfu_status.bState;
+	*data = &usb_inbuf;
+	return 1;
+}
+
+static int
+usb_handle_dfu_abort(const struct usb_packet_setup *p, const void **data)
+{
+	debug("DFU_ABORT\r\n");
+
+	if (p->wIndex != DFU_INTERFACE)
+		return -1;
+
+	switch (dfu_status.bState) {
+	case DFU_dfuIDLE:
+	case DFU_dfuDNLOAD_IDLE:
+	case DFU_dfuUPLOAD_IDLE:
+		dfu_status.bStatus = DFU_OK;
+		dfu_status.bState = DFU_dfuIDLE;
+		return 0;
+	}
+
+	return -1;
 }
 
 #ifdef ACM_DEBUG
@@ -783,6 +1002,14 @@ static const struct usb_setup_handler usb_setup_handlers[] = {
 	{ .req = 0x0b01, .len =  0, .fn = usb_handle_set_interface },
 	{ .req = 0x0102, .len =  0, .fn = usb_handle_clear_feature_endpoint },
 	{ .req = 0x0021, .len =  0, .fn = usb_handle_dfu_detach },
+	{ .req = 0x0121, .len = -1, .fn = usb_handle_dfu_dnload },
+#if 0
+	{ .req = 0x02a1, .len = -1, .fn = usb_handle_dfu_upload },
+#endif
+	{ .req = 0x03a1, .len = -1, .fn = usb_handle_dfu_getstatus },
+	{ .req = 0x0421, .len =  0, .fn = usb_handle_dfu_clrstatus },
+	{ .req = 0x05a1, .len = -1, .fn = usb_handle_dfu_getstate },
+	{ .req = 0x0621, .len =  0, .fn = usb_handle_dfu_abort },
 #ifdef ACM_DEBUG
 	{ .req = 0x2221, .len =  0, .fn = usb_handle_set_control_line_state },
 	{ .req = 0x2021, .len =  7, .fn = usb_handle_set_line_coding },
@@ -1100,6 +1327,113 @@ usb_init(void)
 	usb_connect();
 }
 
+static struct {
+	uint32_t addr;
+	union {
+		uint32_t word;
+		uint8_t byte[4];
+	};
+	bool dirty;
+} progbuf;
+
+static int
+progbuf_flush(void)
+{
+	int ret = nRF51_write(progbuf.addr, progbuf.word);
+
+	if (ret != SWD_OK) {
+		debug("(%u) nRF51_write\r\n", ret);
+		return -1;
+	}
+	progbuf.dirty = false;
+	return 0;
+}
+
+static int
+ihex_record_program(void)
+{
+	uint32_t addr = ihex_address(&ihex_parser);
+	uint8_t *p = ihex_parser.data;
+	uint8_t *end = p + ihex_parser.length;
+	unsigned int i;
+
+#if 0
+	debug("0x%08lx: %hu bytes\r\n", addr,
+			ihex_parser.length);
+#endif
+
+	if (progbuf.dirty && progbuf.addr != (addr & ~0x3UL) && progbuf_flush())
+		return -1;
+
+	progbuf.addr = addr & ~0x3UL;
+	i = addr - progbuf.addr;
+	while (p < end) {
+		progbuf.byte[i++] = *p++;
+		progbuf.dirty = true;
+		if (i == 4) {
+			if (progbuf_flush())
+				return -1;
+
+			progbuf.addr += 4;
+			i = 0;
+		}
+	}
+
+	return 0;
+}
+
+static void
+indata_parse(void)
+{
+	for (uint8_t *p = indata; indata_len > 0; indata_len--) {
+		enum ihex_return iret = ihex_feed(&ihex_parser, *p++);
+		int ret;
+
+		switch (iret) {
+		case IHEX_MORE:
+			break;
+
+		case IHEX_DATA:
+			if (ihex_record_program())
+				goto prog_err;
+			break;
+
+		case IHEX_EOF:
+			debug("EOF\r\n");
+			if (progbuf.dirty && progbuf_flush())
+				goto prog_err;
+			ret = swd_armv6m_reset_run();
+			debug("(%u) swd_armv6m_reset_run\r\n", ret);
+			if (ret != SWD_OK)
+				goto prog_err;
+			ret = nRF51_reboot_run();
+			debug("(%u) nRF51_reboot_run\r\n", ret);
+			if (ret != SWD_OK)
+				goto prog_err;
+			swd_disengage();
+			break;
+
+		case IHEX_EPARSE:
+			debug("ERROR: %s\r\n", ihex_strerror(iret));
+			dfu_status.bStatus = DFU_errTARGET;
+			dfu_status.bState = DFU_dfuERROR;
+			return;
+
+		default:
+			debug("ERROR: %s\r\n", ihex_strerror(iret));
+			dfu_status.bStatus = DFU_errFILE;
+			dfu_status.bState = DFU_dfuERROR;
+			return;
+		}
+	}
+
+	dfu_status.bState = DFU_dfuDNLOAD_SYNC;
+	return;
+prog_err:
+	dfu_status.bStatus = DFU_errPROG;
+	dfu_status.bState = DFU_dfuERROR;
+}
+
 static inline uint8_t
 system_getprodrev(void)
 {
@@ -1180,6 +1514,9 @@ main(void)
 
 	swd_init();
 
+	dfu_status.bState = DFU_dfuIDLE;
+	dfu_status.bwPollTimeout[0] = 2;
+
 	/* sleep when not interrupted */
 	while (1) {
 #ifdef ACM_DEBUG
@@ -1205,6 +1542,12 @@ main(void)
 		}
 		swd_cmd = 0;
 #endif
+		switch (dfu_status.bState) {
+		case DFU_dfuDNBUSY:
+			indata_parse();
+			break;
+		}
+
 		__WFI();
 	}
 }
