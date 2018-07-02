@@ -21,6 +21,8 @@
 
 #include "swd.h"
 
+#define NDEBUG
+
 #ifdef NDEBUG
 #define debug(...)
 #else
