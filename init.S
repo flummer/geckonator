@@ -91,32 +91,32 @@ __Vectors:
 .type Reset_Handler, %function
 .func Reset_Handler
 Reset_Handler:
-	/* copy data with *r1++ = *r0++ while r1 <= r2 */
-	ldr	r0, =__etext
-	ldr	r1, =__data_start__
-	ldr	r2, =__data_end__
+	/* copy data with *r2++ = *r1++ while r2 < r3 */
+	ldr	r1, =__etext
+	ldr	r2, =__data_start__
+	ldr	r3, =__data_end__
 	b	2f
 .ltorg
-1:	ldmia	r0!, {r4}
-	stmia	r1!, {r4}
-2:	cmp	r1, r2
+1:	ldmia	r1!, {r4}
+	stmia	r2!, {r4}
+2:	cmp	r2, r3
 	blt	1b
 
-	/* clear bss with *r1++ = r0 (== 0) while r1 <= r2 */
-	movs	r0, #0
+	/* clear bss with *r2++ = r1 (== 0) while r2 < r3 */
+	movs	r1, #0
 	/* assume .bss follows .data
-	ldr	r1, =__bss_start__
+	ldr	r2, =__bss_start__
 	*/
 	ldr	r3, =__bss_end__
 	/*
 	 * if .bss is empty we clear the first word of
-	 * whatever follows. that should be the top of
-	 * stack or start of heap which is fine
+	 * whatever follows. that should be the bottom
+	 * of stack or start of heap which is fine
 	b	4f
 .ltorg
 	 */
-3:	stmia	r1!, {r0}
-4:	cmp	r1, r3
+3:	stmia	r2!, {r1}
+4:	cmp	r2, r3
 	blt	3b
 	bl	main
 .size Reset_Handler, . - Reset_Handler
