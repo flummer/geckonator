@@ -41,7 +41,7 @@ usb_vreg_flags_clear(uint32_t v)         { USB->IFC = v; }
 
 /* USB_IEN */
 static inline void
-usb_vreg_flags_disable(void)             { USB->IEN = 0; }
+usb_vreg_flags_disable(void)             { USB->IEN = 0UL; }
 static inline void
 usb_vreg_flags_enable(void)              { USB->IEN = USB_IEN_VREGOSL | USB_IEN_VREGOSH; }
 static inline void
@@ -55,32 +55,19 @@ usb_vreg_flag_high_enable(void)          { USB->IEN |= USB_IEN_VREGOSL; }
 
 /* USB_ROUTE */
 static inline void
-usb_pins_disable(void)                   { USB->ROUTE = 0; }
+usb_pins_disable(void)                   { USB->ROUTE = 0UL; }
 static inline void
 usb_pins_enable(void)                    { USB->ROUTE = USB_ROUTE_PHYPEN; }
 static inline void
-usb_pins_pullup_enable(void)             { USB->ROUTE = USB_ROUTE_DMPUPEN | USB_ROUTE_PHYPEN; }
+usb_pins_enable_pullup(void)             { USB->ROUTE = USB_ROUTE_DMPUPEN | USB_ROUTE_PHYPEN; }
 
 /* USB_GAHBCFG */
-enum usb_ahb_config {
-	USB_AHB_CONFIG_SINGLE_BURST      = USB_GAHBCFG_AHBSINGLE,
-	USB_AHB_CONFIG_DMA_NOTIFY        = USB_GAHBCFG_NOTIALLDMAWRIT,
-	USB_AHB_CONFIG_REMOTE_MEMORY     = USB_GAHBCFG_REMMEMSUPP,
-	USB_AHB_CONFIG_TRIGGER_EMPTY     = USB_GAHBCFG_NPTXFEMPLVL,
-	USB_AHB_CONFIG_DMA_ENABLE        = USB_GAHBCFG_DMAEN,
-	USB_AHB_CONFIG_BURST_SINGLE      = USB_GAHBCFG_HBSTLEN_SINGLE,
-	USB_AHB_CONFIG_BURST_INCR        = USB_GAHBCFG_HBSTLEN_INCR,
-	USB_AHB_CONFIG_BURST_INCR4       = USB_GAHBCFG_HBSTLEN_INCR4,
-	USB_AHB_CONFIG_BURST_INCR8       = USB_GAHBCFG_HBSTLEN_INCR8,
-	USB_AHB_CONFIG_BURST_INCR16      = USB_GAHBCFG_HBSTLEN_INCR16,
-	USB_AHB_CONFIG_INTERRUPTS_ENABLE = USB_GAHBCFG_GLBLINTRMSK,
-};
 static inline void
 usb_ahb_config(uint32_t v)               { USB->GAHBCFG = v; }
 
 /* USB_GUSBCFG */
 static inline void
-usb_config(void)                         { USB->GUSBCFG = USB_GUSBCFG_USBTRDTIM_DEFAULT; }
+usb_global_config(uint32_t v)            { USB->GUSBCFG = v; }
 
 /* USB_GRSTCTL */
 static inline uint32_t
@@ -209,6 +196,11 @@ usb_allocate_buffers(uint32_t rx,
 
 /* USB_DCFG */
 static inline void
+usb_device_config(uint32_t v)
+{
+	USB->DCFG = v;
+}
+static inline void
 usb_set_address(uint32_t addr)
 {
 	USB->DCFG = (USB->DCFG & ~_USB_DCFG_DEVADDR_MASK)
@@ -216,6 +208,8 @@ usb_set_address(uint32_t addr)
 }
 
 /* USB_DCTL */
+static inline void
+usb_device_control(uint32_t v)           { USB->DCTL = v; }
 static inline void
 usb_global_out_nak_clear(void)           { USB->DCTL |= USB_DCTL_CGOUTNAK; }
 static inline void
@@ -259,18 +253,30 @@ usb_enumerated_speed(void)
 {
 	return (USB->DSTS & _USB_DSTS_ENUMSPD_MASK) >> _USB_DSTS_ENUMSPD_SHIFT;
 }
+static inline bool
+usb_speed_low(void)
+{
+	return (USB->DSTS & _USB_DSTS_ENUMSPD_MASK) == (2UL << _USB_DSTS_ENUMSPD_SHIFT);
+}
+static inline bool
+usb_speed_full(void)
+{
+	return (USB->DSTS & _USB_DSTS_ENUMSPD_MASK) == (3UL << _USB_DSTS_ENUMSPD_SHIFT);
+}
 static inline uint32_t
 usb_frame_odd(uint32_t v)
 {
-	return v & 0x100;
+	return v & 0x100UL;
 }
 static inline uint32_t
 usb_frame_number(uint32_t v)
 {
-	return (v >> 8) & 0x3FFF;
+	return (v >> 8) & 0x3FFFUL;
 }
 
 /* USB_DIEPMSK */
+static inline void
+usb_ep_in_flags_enable(uint32_t v)       { USB->DIEPMSK = v; }
 static inline void
 usb_ep_in_flag_nak_disable(void)         { USB->DIEPMSK &= ~USB_DIEPMSK_NAKMSK; }
 static inline void
@@ -281,6 +287,8 @@ static inline void
 usb_ep_in_flag_disabled_enable(void)     { USB->DIEPMSK |= USB_DIEPMSK_EPDISBLDMSK; }
 
 /* USB_DOEPMSK */
+static inline void
+usb_ep_out_flags_enable(uint32_t v)      { USB->DOEPMSK = v; }
 static inline void
 usb_ep_out_flag_nak_disable(void)        { USB->DOEPMSK &= ~USB_DOEPMSK_NAKMSK; }
 static inline void
@@ -296,20 +304,25 @@ usb_ep_flags(void)                       { return USB->DAINT; }
 static inline uint32_t
 usb_ep_flag_in(unsigned int i, uint32_t v)
 {
-	return v & (0x00000001 << i);
+	return v & (0x00000001UL << i);
 }
 static inline uint32_t
 usb_ep_flag_out(unsigned int i, uint32_t v)
 {
-	return v & (0x00010000 << i);
+	return v & (0x00010000UL << i);
 }
 static inline uint32_t
 usb_ep_flag_in_or_out(unsigned int i, uint32_t v)
 {
-	return v & (0x00010001 << i);
+	return v & (0x00010001UL << i);
 }
 
 /* USB_DAINTMSX */
+static inline void
+usb_ep_flags_enable(uint32_t v)
+{
+	USB->DAINTMSK = v;
+}
 static inline void
 usb_ep_flag_out_disable(unsigned int i)
 {
@@ -872,7 +885,7 @@ usb_phy_stop(void)
 static inline void
 usb_phy_start(void)
 {
-	USB->PCGCCTL = 0;
+	USB->PCGCCTL = 0UL;
 }
 
 /* USB_FIFO0Dx */
