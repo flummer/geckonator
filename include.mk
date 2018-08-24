@@ -1,5 +1,5 @@
 # This file is part of geckonator.
-# Copyright 2017 Emil Renner Berthing <esmil@esmil.dk>
+# Copyright 2017-2019 Emil Renner Berthing <esmil@esmil.dk>
 #
 # geckonator is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -98,8 +98,10 @@ E=@echo
 Q=@
 endif
 
-sources = init.S geckonator.c main.c
-objects = $(patsubst %,$(OUTDIR)/%.o,$(basename $(sources)))
+headers  = $(wildcard *.h)
+sources  = $(filter-out init.% geckonator.%,$(wildcard *.S) $(wildcard *.c))
+objects  = $(OUTDIR)/init.o $(OUTDIR)/geckonator.o
+objects += $(patsubst %,$(OUTDIR)/%.o,$(basename $(filter %.S %.c,$(sources))))
 
 .SECONDEXPANSION:
 .PHONY: all release dis clean install flash dfu sdk
@@ -118,11 +120,11 @@ $(OUTDIR)%/:
 	$E '  MKDIR   $@'
 	$Q$(MKDIR_P) $@
 
-$(OUTDIR)/%.o: %.S $(MAKEFILE_LIST) | $$(@D)/
+$(OUTDIR)/%.o: %.S $(headers) $(MAKEFILE_LIST) | $$(@D)/
 	$E '  AS      $@'
 	$Q$(AS) -o $@ -c $(ASFLAGS) $(CPPFLAGS) $<
 
-$(OUTDIR)/%.o: %.c $(MAKEFILE_LIST) | $$(@D)/
+$(OUTDIR)/%.o: %.c $(headers) $(MAKEFILE_LIST) | $$(@D)/
 	$E '  CC      $@'
 	$Q$(CC) -o $@ -c $(CFLAGS) $(CPPFLAGS) $<
 
