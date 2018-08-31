@@ -6,12 +6,12 @@
 #ifdef GPIO_TYPE_STRUCT
 
 typedef struct {
-#ifdef GPIO_TYPE_8BIT
-	unsigned port : 4;
-	unsigned nr   : 4;
-#else
+#ifdef GPIO_TYPE_16BIT
 	uint8_t port;
 	uint8_t nr;
+#else
+	unsigned port : 4;
+	unsigned nr   : 4;
 #endif
 } gpio_pin_t;
 #define GPIO_PIN(p, n) ((gpio_pin_t){ p, n })
@@ -27,17 +27,7 @@ gpio_pin_eq(gpio_pin_t a, gpio_pin_t b)
 }
 
 #else
-#ifdef GPIO_TYPE_8BIT
-
-typedef uint8_t gpio_pin_t;
-#define GPIO_PIN(p,n) (((gpio_pin_t)(p)<<4)|(gpio_pin_t)(n))
-
-static inline unsigned int
-gpio_port(gpio_pin_t pin)          { return pin >> 4; }
-static inline unsigned int
-gpio_nr(gpio_pin_t pin)            { return pin & 0xFU; }
-
-#else
+#ifdef GPIO_TYPE_16BIT
 
 typedef uint16_t gpio_pin_t;
 #define GPIO_PIN(p,n) (((gpio_pin_t)(p)<<8)|(gpio_pin_t)(n))
@@ -46,6 +36,16 @@ static inline unsigned int
 gpio_port(gpio_pin_t pin)          { return pin >> 8; }
 static inline unsigned int
 gpio_nr(gpio_pin_t pin)            { return pin & 0xFFU; }
+
+#else
+
+typedef uint8_t gpio_pin_t;
+#define GPIO_PIN(p,n) (((gpio_pin_t)(p)<<4)|(gpio_pin_t)(n))
+
+static inline unsigned int
+gpio_port(gpio_pin_t pin)          { return pin >> 4; }
+static inline unsigned int
+gpio_nr(gpio_pin_t pin)            { return pin & 0xFU; }
 
 #endif
 

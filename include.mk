@@ -83,7 +83,6 @@ LDFLAGS    = $(ARCHFLAGS) $(LTO) $(OPT) -nostartfiles -specs=nano.specs -Wl,-O1,
 ifndef OLD
 LTO        = -flto
 ARCHFLAGS += -masm-syntax-unified
-CPPFLAGS  += -DGPIO_TYPE_STRUCT
 LDFLAGS   += -Wl,--defsym,__flash_size=$(FLASH),--defsym,__bootloader_size=$(BOOTLOADER)
 LDSCRIPT   = dynamic.ld
 else
