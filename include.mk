@@ -21,7 +21,7 @@ NAME       = code
 OUTDIR     = out
 DESTDIR    = .
 CHIP       = EFM32HG309F64
-DFU_DEVICE = -a GeckoBoot
+DFU_DEVICE = -d 1d50:613f,1d50:613e
 
 ifeq ($(patsubst %F64,,$(CHIP)),)
 FLASH      = 64K
